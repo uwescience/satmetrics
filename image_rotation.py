@@ -3,12 +3,10 @@ Author: Kilando Chambers
 
 This module contains the image rotation class that can be used to rotate the
 an image containing a streak such that the streak is horizontal, or parllel with
-the x-axis. This module only contains the class, and the class will inherit the 
-properties of the line detection class writtten by Abhilash Biswas. Use the 
-line_detection_testing.ipynb file to import this module and apply it on multiple images.
+the x-axis.  Use the line_detection_testing.ipynb file to import this module and 
+apply it on multiple images.
 
 Process (in development currently):
-    1. Inherit properties of LineDetection
     1. Declare init variables (see description of parameters within the class)
     2. Choose image
     3. Process the image:
@@ -38,6 +36,7 @@ import imutils
 #Create class with inheritance
 class ImageRotation:
     def __init__(self):
+        #considering if self.image and self.polar_coor should be required initialized variables
         self.image = None
         self.angle = None
         self.coordinates = None
@@ -71,6 +70,7 @@ class ImageRotation:
         if x2 > x_size:
             x2 = x_size
             y2 = (-1 * (np.cos(theta) / np.sin(theta)) * x2) + (rho / np.sin(theta))
+            #formula can be found on opencv2 Hough Transform tutorial
         
         if y1 > y_size:
             y1 = y_size
@@ -85,14 +85,25 @@ class ImageRotation:
         return lines_coords
 
     def mean_coordinates(self, coordinates):
+        '''Finds mean edge cartesian coordinates of all Hough Transform lines
+        
+        Parameters
+        __________
+        coordinates : 'list'
+        List of two pair of cartesian coordinates for each line, where one pair is where
+        the streak enters the image and the other is where the streak exits the image 
+        '''
+        #separating entrance coordinates and exit coordinates
         first_set = [points[0] for points in coordinates]
         second_set = [points[1] for points in coordinates]
 
+        #separating entrance and exit coordinates by x and y values
         x1_list = [subcoor[0] for subcoor in first_set]
         y1_list = [subcoor[1] for subcoor in first_set]
         x2_list = [subcoor[0] for subcoor in second_set]
         y2_list = [subcoor[1] for subcoor in second_set]
 
+        #finding mean of all x and y values for entrance and exit coordinates
         refigured_coor = [x1_list, y1_list, x2_list, y2_list]
         mean_coor = [np.mean(subcoordinates) for subcoordinates in refigured_coor]
 
@@ -123,6 +134,7 @@ class ImageRotation:
             slope = (coor_1[1] - coor_2[1]) / (coor_1[0] - coor_2[0])
             angle = np.arctan(slope)
         
+        #converting angle from radians to degrees
         self.angle = angle * 180 / np.pi
         angle_deg = self.angle
         

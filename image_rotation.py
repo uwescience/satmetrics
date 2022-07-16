@@ -140,9 +140,33 @@ class ImageRotation:
         
         return angle_deg
 
-    def rotate_image(self, image):
+    def rotate_image(self):
         self.angle = self.image_angle(self.mean[0], self.mean[1])
-        self.rotated_image = imutils.rotate(image, angle = self.angle)
-        rot_img = self.rotated_image
-        return rot_img
+
+        #finding midpoint of line to find point of rotation
+        #because pixels have to be integers, this midpoint will be an estimate
+        rotation_x = (self.mean[1][0] + self.mean[0][0]) // 2
+        rotation_y = (self.mean[1][1] + self.mean[0][1]) // 2
+        print(rotation_x, rotation_y)
+
+        #rotating original image without crop
+        matrix = cv2.getRotationMatrix2D((rotation_x, rotation_y), self.angle, 1.0)
+        self.rotated_image = cv2.warpAffine(self.image, matrix, (self.image.shape[1], self.image.shape[0]))
+
+        #cropping image
+        new_height = self.image.shape[0] // 10
+
+        #detecting edge cases where tthe 10% rule does not apply
+        if rotation_y - new_height < 0:
+            new_height = rotation_y
+        elif rotation_y + new_height > self.image.shape[0]:
+            new_height = self.image.shape[0] - rotation_y
+
+        self.rotated_image = self.rotated_image[int(rotation_y - new_height): int(rotation_y + new_height)]
+
+
+        
+        
+
+
         

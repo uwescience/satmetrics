@@ -246,6 +246,7 @@ class LineDetection:
         limg = np.zeros(self.image.shape, dtype=np.uint8)
         limg = self.draw_lines(lines, limg)
 
-        return limg,processed,thresholded_image,edges,lines
+        return limg,processed,thresholded_image,edges,lines 
+
 
 

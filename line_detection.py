@@ -165,7 +165,7 @@ class LineDetection:
         if self.trim == True:
             edges = self.image_trim(edges,self.trim_percent)
 
-        return (edges,processed_image)
+        return (edges,processed_image, thresholded_image)
 
     #Define function to draw straight lines in hough transformation
 
@@ -231,7 +231,7 @@ class LineDetection:
         #Processing the image
         processed_image_tuple = self.process_image()
         
-        edges = processed_image_tuple[0]
+        edges, processed, thresholded_image = processed_image_tuple
         processed_image = processed_image_tuple[1]
 
         #Performing Hough transformation
@@ -246,6 +246,7 @@ class LineDetection:
         limg = np.zeros(self.image.shape, dtype=np.uint8)
         limg = self.draw_lines(lines, limg)
 
-        return limg,edges,lines
+        return limg,processed,thresholded_image,edges,lines 
 
+#testing 
 

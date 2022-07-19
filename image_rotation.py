@@ -31,7 +31,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 import line_detection
-import imutils
+#import imutils
 
 #Create class with inheritance
 class ImageRotation:
@@ -140,9 +140,12 @@ class ImageRotation:
         
         return angle_deg
 
-    def rotate_image(self, image):
-        self.angle = self.image_angle(self.mean[0], self.mean[1])
-
+    def rotate_image(self, image, angle=None):
+        if angle is None:
+             self.angle = self.image_angle(self.mean[0], self.mean[1]) 
+        else:
+            self.angle = angle
+        print(angle)
         #finding midpoint of line to find point of rotation
         #because pixels have to be integers, this midpoint will be an estimate
         rotation_x = (self.mean[1][0] + self.mean[0][0]) // 2

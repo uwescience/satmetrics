@@ -30,10 +30,8 @@ from tkinter import N
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
-import line_detection
-import imutils
 
-#Create class with inheritance
+#Create class with inheritance #
 class ImageRotation:
     def __init__(self):
         #considering if self.image and self.polar_coor should be required initialized variables
@@ -43,6 +41,8 @@ class ImageRotation:
         self.polar_coor = None
         self.rotated_image = None
         self.mean = None
+        self.median = None
+ 
 
     def get_coord(self, rho, theta):
         '''Finds Cartesian Coordinates of a line at the edge of image given the radius and angle
@@ -84,7 +84,7 @@ class ImageRotation:
         lines_coords = self.coordinates
         return lines_coords
 
-    def mean_coordinates(self, coordinates):
+    def summarized_coordinates(self, coordinates, method):
         '''Finds mean edge cartesian coordinates of all Hough Transform lines
         
         Parameters
@@ -93,25 +93,20 @@ class ImageRotation:
         List of two pair of cartesian coordinates for each line, where one pair is where
         the streak enters the image and the other is where the streak exits the image 
         '''
-        #separating entrance coordinates and exit coordinates
-        first_set = [points[0] for points in coordinates]
-        second_set = [points[1] for points in coordinates]
+        #creates a single list with clusters of x1, y1, x2, y2 values
+        points_sep = [points[i][j] for i in range(2) for j in range(2) for points in coordinates]
+        #determining the number of elements in each cluster of subcoordinates (e.g. the number of total x1s)
+        mod = int(len(points_sep)/4)
 
-        #separating entrance and exit coordinates by x and y values
-        x1_list = [subcoor[0] for subcoor in first_set]
-        y1_list = [subcoor[1] for subcoor in first_set]
-        x2_list = [subcoor[0] for subcoor in second_set]
-        y2_list = [subcoor[1] for subcoor in second_set]
+        #finding finding mean or median of each subcoordinate to generate entrance and exit coordinates
+        if method == 'mean':
+            summ_coor = [np.mean(points_sep[i * mod : ((i + 1) * mod)]) for i in range(4)]
+            self.mean = ([summ_coor[0], summ_coor[1]], [summ_coor[2], summ_coor[3]])
+        elif method == 'median':
+            summ_coor = [np.median(points_sep[i * mod : ((i + 1) * mod)]) for i in range(4)]
+            self.median = ([summ_coor[0], summ_coor[1]], [summ_coor[2], summ_coor[3]])
 
-        #finding mean of all x and y values for entrance and exit coordinates
-        refigured_coor = [x1_list, y1_list, x2_list, y2_list]
-        mean_coor = [np.mean(subcoordinates) for subcoordinates in refigured_coor]
-
-        x1, y1 = mean_coor[0], mean_coor[1]
-        x2, y2 = mean_coor[2], mean_coor[3]
-        self.mean = ([x1, y1], [x2, y2])
-
-        return [x1, y1], [x2, y2]
+        return [summ_coor[0], summ_coor[1]], [summ_coor[2], summ_coor[3]]
 
     def image_angle(self, coor_1, coor_2):
         '''Finds angle at which to rotate the image
@@ -140,30 +135,34 @@ class ImageRotation:
         
         return angle_deg
 
-    def rotate_image(self, image):
-        self.angle = self.image_angle(self.mean[0], self.mean[1])
+    def rotate_image(self, image, method):
 
         #finding midpoint of line to find point of rotation
-        #because pixels have to be integers, this midpoint will be an estimate
-        rotation_x = (self.mean[1][0] + self.mean[0][0]) // 2
-        rotation_y = (self.mean[1][1] + self.mean[0][1]) // 2
-        print(rotation_x, rotation_y)
+        #because pixels have to be integers, this midpoint will be an estimate      
 
         #rotating original image without crop
-        matrix = cv2.getRotationMatrix2D((rotation_x, rotation_y), self.angle, 1.0)
-        self.rotated_image = cv2.warpAffine(image, matrix, (self.image.shape[1], self.image.shape[0]))
+
+        self.angle = self.image_angle(method[0], method[1])
+
+        method_rotation_x = (method[1][0] + method[0][0]) // 2
+        method_rotation_y = (method[1][1] + method[0][1]) // 2
+
+        matrix = cv2.getRotationMatrix2D((method_rotation_x, method_rotation_y), self.angle, 1.0)
+        rotated_image = cv2.warpAffine(image, matrix, (self.image.shape[1], self.image.shape[0]))
 
         #cropping image
         new_height = self.image.shape[0] // 10
 
-        #detecting edge cases where tthe 10% rule does not apply
+        #detecting edge cases where the 10% rule does not apply
 
-        if rotation_y - new_height < 0:
-            new_height = rotation_y
-        elif rotation_y + new_height > self.image.shape[0]:
-            new_height = self.image.shape[0] - rotation_y
+        if method_rotation_y - new_height < 0:
+            new_height = method_rotation_y
+        elif method_rotation_y + new_height > self.image.shape[0]:
+            new_height = self.image.shape[0] - method_rotation_y
 
-        self.rotated_image = self.rotated_image[int(rotation_y - new_height): int(rotation_y + new_height)]
+        rotated_image = rotated_image[int(method_rotation_y - new_height): int(method_rotation_y + new_height)]
+
+        return rotated_image
 
 
         

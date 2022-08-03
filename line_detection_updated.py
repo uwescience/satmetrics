@@ -248,7 +248,7 @@ class LineDetection:
     def hough_transformation(self):
         '''
         Detects the straight lines in an image
-
+        
         Parameters
         ----------
         self : 'class'

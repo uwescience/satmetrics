@@ -76,8 +76,8 @@ def coord_all_lines(polar_coor, image):
     ---------
     polar_coor : `list' or `array`
         List of Polar Coordinates in a cluster
-    image : `2D matrix`
-        Image containing the streaks of interest
+    image : `numpy.array`
+        2d array containing the image with the streaks of interest
 
     Returns
     --------
@@ -156,18 +156,18 @@ def rotate_image(image, angle, coordinates):
 
     Parameters
     -----------
-    image : `2D matrix`
+    image : `numpy.array`
         Image containing the streaks of interest
     angle : `float`
         Angle at which a particular streak is to be rotated such that the streak is parallel with
         the x-axis of the image
-    coordinates: `list`
+    coordinates : `list`
         A list of length two with the entrance and exit cartesian coordinates
         of the streak of interest
 
     Returns
     --------
-    rotated_image : `2D matrix`
+    rotated_image : `numpy.array`
         Image containing the streak of interest rotated such that it is parallel with
         the x-axis and cropped to reduce noise
     """
@@ -205,13 +205,13 @@ def rotate_img_clustered(clustered_lines, angles, image):
         and the third column corresponding to the cluster
     angle : `array`
         Array of angles determined by sckit image for each houghline
-    image: `2D Matrix`
-        An image containing the streaks of interest
+    image : `numpy.array`
+        A 2D array containing the image with the streaks of interest
 
     Return
     --------
-    rot_images: `list`
-        List of 2D matrices, each 2D matrix represents a rotated image of a single cluster
+    rot_images : `list`
+        List of 2D matrices, each `numpy.array` represents a rotated image of a single cluster
     """
 
     rot_images = []

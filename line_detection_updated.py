@@ -30,7 +30,7 @@ def image_mask(img, percent):
 
     Parameters
     ----------
-    img : 'numpy.ndarray'
+    img : `numpy.ndarray`
         The image to be masked
     percent : `float`
         percentage of the image borders to be masked out.
@@ -38,15 +38,21 @@ def image_mask(img, percent):
 
     Returns
     --------
-    x_dim_top, x_dim_bottom, y_dim_left, y_dim_right : `tuple`
-        coordinates of the numpy array at which masking should be applied
+    x_dim_left : `int` 
+        Left x coordinate of masking rectangle
+    x_dim_right : `int`
+        Right x coordinate of masking rectangle
+    y_dim_top : `int`
+        Top y coordinate of masking rectangle
+    y_dim_bottom : `int`
+        Bottom y coordinate of masking rectangle
     """
-    x_dim_top = int(img.shape[0]*(percent/2))
-    x_dim_bottom = int(img.shape[0]*(1-percent/2))
-    y_dim_left = int(img.shape[1]*(percent/2))
-    y_dim_right = int(img.shape[1]*(1-percent/2))
+    x_dim_left = int(img.shape[0]*(percent/2))
+    x_dim_right = int(img.shape[0]*(1-percent/2))
+    y_dim_top = int(img.shape[1]*(percent/2))
+    y_dim_bottom = int(img.shape[1]*(1-percent/2))
 
-    return x_dim_top, x_dim_bottom, y_dim_left, y_dim_right
+    return x_dim_left, x_dim_right, y_dim_top, y_dim_bottom
 
 
 def show(img, ax=None, show=True, title=None, **kwargs):
@@ -94,13 +100,17 @@ def cluster(cart_coords, lines, bandwidth=50):
     clustered_lines : `numpy.ndarray`
         An array where each row has the polar coordinates of an estimated line
         and the cluster label for that line
+    
+    See Also
+    --------
+    sklearn.cluster.MeanShift : MeanShift clustering algorithm
     """
     # Convert to an array
     cart_coords_array = np.array(cart_coords)
 
     # Apply MeanShift clustering
     clustering = MeanShift(bandwidth=bandwidth).fit(cart_coords_array)
-    labels = (clustering.labels_).reshape((len(clustering.labels_), 1))
+    labels = clustering.labels_.reshape((len(clustering.labels_), 1))
     clustered_lines = np.hstack((lines, labels))
 
     # Plot the clusters
@@ -132,10 +142,10 @@ class LineDetection:
     mask_percent : `float`, default=0.2
         The proportion of the image's edge to be masked
     brightness_cuts : `tuple`, default=(2,2)
-        Limits of pixel brightness values that will be cut.
-        Pixels with brightness value larger than `mean - brightness_cuts[0] * std`
-        are set to `mean - brightness_cuts[0] * std`, and pixel values lower than 
-        `mean - brightness_cuts[1] * std` are set to 0
+        Limits of pixel brightness values, `(lower, upper)`, that will be cut.
+        Pixels with brightness value smaller than `mean - lower * std`
+        are set to 0, and pixel values larger than 
+        `mean + upper * std` are set to `mean + upper * std`
     thresholding_cut : `float`, default=0.5
         Applied on the processed image. The pixel intensity at these many standard
         deviations above the mean becomes the threshold limit. A binary threshold of
@@ -193,15 +203,15 @@ class LineDetection:
         
         See Also
         --------
-        line_detection_updated.LineDetection.hough_transformation
+        line_detection_updated.LineDetection.hough_transformation : Hough Line transformation function
         '''
         trimmed_image = self.image
 
         # Making first brightness cuts in the image
         # Outliers on the positive side take the value of the cut.
         # Outliers on the negative side take the value 0
-        up_limit = trimmed_image.mean() + self.brightness_cuts[0]*trimmed_image.std()
-        low_limit = trimmed_image.mean() - self.brightness_cuts[1]*trimmed_image.std()
+        up_limit = trimmed_image.mean() + self.brightness_cuts[1]*trimmed_image.std()
+        low_limit = trimmed_image.mean() - self.brightness_cuts[0]*trimmed_image.std()
         trimmed_image[trimmed_image > up_limit] = up_limit
         trimmed_image[trimmed_image <= low_limit] = 0
 
@@ -220,8 +230,8 @@ class LineDetection:
 
         # Masking image to remove any borders
         if self.mask is True:
-            x_top, x_bottom, y_left, y_right = image_mask(thresholded_image, self.mask_percent)
-            thresholded_image = thresholded_image[x_top:x_bottom, y_left:y_right]
+            x_left, x_right, y_top, y_bottom = image_mask(thresholded_image, self.mask_percent)
+            thresholded_image = thresholded_image[y_top:y_bottom, x_left:x_right]
 
         # Deciding Kernel size of blur based on amount of noise
         num_bright_pixels = np.sum(thresholded_image > np.mean(thresholded_image))
@@ -260,6 +270,11 @@ class LineDetection:
             The blurred image from process_image returns
         edges : `numpy.ndarray`
             The Canny edge detected image from process_image returns
+        
+        See Also
+        --------
+        skimage.transform.hough_line : Scikit Image Hough Line function
+        cv2.Canny : OpenCV Canny edge detector
         '''
 
         # Processing the image

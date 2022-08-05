@@ -1,9 +1,9 @@
 """
 Author: Kilando Chambers
 
-This module contains multiple functions that can be used to rotate 
+This module contains multiple functions that can be used to rotate
 an image containing a streak or multiple streaks such that the streak is horizontal, or parllel with
-the x-axis.  Use the line_detection_testing.ipynb file to import this module and 
+the x-axis. Use the line_detection_testing.ipynb file to import this module and
 apply it on multiple images.
 
 Process (in development currently):
@@ -17,7 +17,8 @@ Process (in development currently):
     3. Perform Hough Transformation on the Canny edge image to get streak coordinates
     4. Convert streak polar coordinates into cartesian coordinates for each cluster
     5. Find the mean coordinates at the edges of the image for each cluster of hough lines
-    6. Determine the angle of rotation of each cluster of hough lines for the image based on the mean coordinates
+    6. Determine the angle of rotation of each cluster of hough lines for the image
+       based on the mean coordinates
     7. Rotate the image for each cluster at the determined angle of rotation
 """
 
@@ -28,16 +29,16 @@ import cv2
 def get_coord(rho, theta, image):
     """Finds Cartesian Coordinates of a line at the edge of image given the radius and angle
     in Polar Coordinates
-    
+
     Parameters
-    __________
+    -----------
     rho : `float`
         Radius of detected line in Polar Coordinates
     theta : `float`
         Angle of detected line in Polar Coordinates
 
      Returns
-    __________
+    ----------
     p1 : `list`
         Pair of `(x1, y1)` pixel coordinates where line enters image.
     p2 : `list`
@@ -47,128 +48,134 @@ def get_coord(rho, theta, image):
     x_size = image.shape[1]
     y_size = image.shape[0]
 
-    #determine where line would be if it were to hit every edge of the image
+    # determine where line would be if it were to hit every edge of the image
     one = [0, rho / np.sin(theta)]
     two = [rho / np.cos(theta), 0]
     three = [x_size, -1 * (np.cos(theta) / np.sin(theta) * x_size) + (rho / np.sin(theta))]
     four = [(-1 * (np.sin(theta) / np.cos(theta)) * y_size) + (rho / np.cos(theta)), y_size]
 
-    #isolate the x values and the y values
+    # isolate the x values and the y values
     validate = [one, two, three, four]
     validate = np.array(validate)
-    val_x = validate[:,0]
-    val_y = validate[:,1]
+    val_x = validate[:, 0]
+    val_y = validate[:, 1]
 
-    #determine if the x-values or y-values given are in the boundaries of the image
+    # determine if the x-values or y-values given are in the boundaries of the image
     bool_x = [0 <= val_x[i] <= x_size for i in range(4)]
     bool_y = [0 <= val_y[i] <= y_size for i in range(4)]
     true_bool = [bool_x[i] & bool_y[i] for i in range(4)]
-    
     final_coord = validate[true_bool]
     return final_coord
+
 
 def coord_all_lines(polar_coor, image):
     """Calls get_coord function to create a list of cartesian coordinates converted
     from polar coordinates
-    
+
     Parameters
-    __________
+    ---------
     polar_coor : `list' or `array`
         List of Polar Coordinates in a cluster
     image : `2D matrix`
         Image containing the streaks of interest
 
     Returns
-    __________
+    --------
     coordinates : `list`
-        List of [(x1,y1), (x2,y2)] cartesian coordinates 
+        List of [(x1,y1), (x2,y2)] cartesian coordinates
     """
 
-    #takes list of (rho, theta) coordinates and returns a list of converted cartesian coordinates
-    coordinates = [get_coord(line[0],line[1], image) for line in polar_coor]
+    # takes list of (rho, theta) coordinates and returns a list of converted cartesian coordinates
+    coordinates = [get_coord(line[0], line[1], image) for line in polar_coor]
     return coordinates
+
 
 def summarized_coordinates(coordinates):
     """Finds mean edge cartesian coordinates of all lines in a cluster
-    
+
     Parameters
-    __________
+    -----------
     coordinates : `list`
         List of two pair of cartesian coordinates for each line, where one pair is where
         the streak enters the image and the other is where the streak exits the image
-    
+
     Returns
-    __________
+    ---------
     coordinates : `list`
         [(x1,y1), (x2,y2)], which represents the mean entrance and exit points for all lines
-        in the cluster   
+        in the cluster
     """
 
-    #creates a single list with clusters of x1, y1, x2, y2 values
+    # creates a single list with clusters of x1, y1, x2, y2 values
     points_sep = [points[i][j] for i in range(2) for j in range(2) for points in coordinates]
-    #determining the number of elements in each cluster of subcoordinates (e.g. the number of total x1s)
+    # determining the number of elements in each cluster of subcoordinates
+    # (e.g. the number of total x1s)
     mod = int(len(points_sep)/4)
 
-    #finding finding mean or median of each subcoordinate to generate entrance and exit coordinates
-    summ_coor = [np.mean(points_sep[i * mod : ((i + 1) * mod)]) for i in range(4)]
+    # finding finding mean or median of each subcoordinate to generate
+    # entrance and exit coordinates
+    summ_coor = [np.mean(points_sep[i * mod: ((i + 1) * mod)]) for i in range(4)]
 
     return [summ_coor[0], summ_coor[1]], [summ_coor[2], summ_coor[3]]
 
+
 def determine_rotation_angle(coor_1, coor_2):
     """Finds angle at which to rotate the image
-    
+
     Parameters
-    __________
+    -----------
     coor_set1 : `tuple`
-        Any set of cartesian coordinates that lie on the line at which the image is to be rotated 
+        Any set of cartesian coordinates that lie on the line at which the image is to be rotated
     coor_set2 : `tuple'
-        Any set of cartesian coordinatets unequal to the first set of coordinates that lie on the line at
-        which the image is to be rotated
-    
+        Any set of cartesian coordinatets unequal to the first set of coordinates that lie on
+        the line at which the image is to be rotated
+
     Returns
-    __________
+    --------
     angle : `float`
-        Angle, in degrees, at which the image should be rotated so the streak of interest will be parallel
-        with the x-axis
+        Angle, in degrees, at which the image should be rotated so the streak of
+        interest will be parallel with the x-axis
     """
 
-    #trigonometry
+    # trigonometry
     if coor_1[0] - coor_2[0] == 0:
         angle = np.pi / 2
-    else: 
+    else:
         slope = (coor_1[1] - coor_2[1]) / (coor_1[0] - coor_2[0])
         angle = np.arctan(slope)
-    
-    #converting angle from radians to degrees
+
+    # converting angle from radians to degrees
     angle = (angle * 180 / np.pi)
-    
+
     return angle
+
 
 def rotate_image(image, angle, coordinates):
     """Rotates an image containing a streak about that streak's midpoint and determined
     angle of rotation and crops that image for further analysis
-    
+
     Parameters
-    __________
+    -----------
     image : `2D matrix`
-        Image containing the streaks of interest  
+        Image containing the streaks of interest
     angle : `float`
         Angle at which a particular streak is to be rotated such that the streak is parallel with
         the x-axis of the image
     coordinates: `list`
-        A list of length two with the entrance and exit cartesian coordinates of the streak of interest
-    
+        A list of length two with the entrance and exit cartesian coordinates
+        of the streak of interest
+
     Returns
-    __________
+    --------
     rotated_image : `2D matrix`
-        Image containing the streak of interest rotated such that it is parallel with the x-axis and cropped
-        to reduce noise
+        Image containing the streak of interest rotated such that it is parallel with
+        the x-axis and cropped to reduce noise
     """
 
-    #finding midpoint of line to find point of rotation
-    #because pixels have to be integers, this midpoint will be an estimate      
+    # finding midpoint of line to find point of rotation
+    # because pixels have to be integers, this midpoint will be an estimate
 
-    #rotating original image without crop
+    # rotating original image without crop
 
     rotation_x = (coordinates[1][0] + coordinates[0][0]) // 2
     rotation_y = (coordinates[1][1] + coordinates[0][1]) // 2
@@ -177,7 +184,8 @@ def rotate_image(image, angle, coordinates):
     rotated_image = cv2.warpAffine(image, matrix, (image.shape[1], image.shape[0]))
 
     # cropping image
-    distance = np.sqrt((coordinates[1][0] - coordinates[0][0])**2 + (coordinates[1][1] - coordinates[0][1])**2)
+    distance = np.sqrt((coordinates[1][0] - coordinates[0][0])**2 +
+                       (coordinates[1][1] - coordinates[0][1])**2)
     if distance < image.shape[1]:
         rotated_image = rotated_image[int(rotation_y - 50): int(rotation_y + 50), 0: int(distance)]
     else:
@@ -185,44 +193,46 @@ def rotate_image(image, angle, coordinates):
 
     return rotated_image
 
+
 def rotate_img_clustered(clustered_lines, angles, image):
     """Creates a rotated image for each cluster of lines
-    
+
     Parameters
-    __________
+    -----------
     clustered_lines : `array`
-        Array of lines with each row corresponding to a single houghline, the first column corresponding to rho, 
-        the second column corresponding to theta, and the third column corresponding to the cluster
+        Array of lines with each row corresponding to a single houghline,
+        the first column corresponding to rho, the second column corresponding to theta,
+        and the third column corresponding to the cluster
     angle : `array`
         Array of angles determined by sckit image for each houghline
     image: `2D Matrix`
         An image containing the streaks of interest
-    
-    Returns
-    __________
+
+    Return
+    --------
     rot_images: `list`
         List of 2D matrices, each 2D matrix represents a rotated image of a single cluster
     """
 
     rot_images = []
-    ncluster = int(max(clustered_lines[:,2])) + 1
+    ncluster = int(max(clustered_lines[:, 2])) + 1
 
     for i in range(ncluster):
-        cur_cluster = clustered_lines[clustered_lines[:,2] == i][:,0:2] 
+        cur_cluster = clustered_lines[clustered_lines[:, 2] == i][:, 0:2]
 
         if len(cur_cluster) == 1:
-            cur_angle = angles[clustered_lines[:,2] == i]
+            cur_angle = angles[clustered_lines[:, 2] == i]
             cur_angle = (cur_angle * 180 / np.pi) - 90
             cur_angle = cur_angle[0]
 
-            coord = get_coord(rho = cur_cluster[0][0], theta = cur_cluster[0][1], image = image)
-            rotated_image = rotate_image(image, angle  = cur_angle, coordinates = coord)
+            coord = get_coord(rho=cur_cluster[0][0], theta=cur_cluster[0][1], image=image)
+            rotated_image = rotate_image(image, angle=cur_angle, coordinates=coord)
             rot_images.append(rotated_image)
         else:
             list_coord = coord_all_lines(cur_cluster, image)
             coord = summarized_coordinates(list_coord)
             cur_angle = determine_rotation_angle(coord[0], coord[1])
-            rotated_image = rotate_image(image, angle  = cur_angle, coordinates = coord)
+            rotated_image = rotate_image(image, angle=cur_angle, coordinates=coord)
             rot_images.append(rotated_image)
 
     return rot_images

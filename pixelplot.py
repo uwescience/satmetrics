@@ -2,28 +2,9 @@
 Author: Ashley Santos
 
 This module contains pixel plotting module that can be used to equalize and plot the median intensity values of the rotated image.
-Use the line_detection_testing.ipynb file to import this module and apply it on multiple images.
 
-Process (in development currently):
-    1. Declare init variables (see description of parameters within the class)
-    2. Choose image
-    3. Process the image:
-        a. Apply z_score_trim once to reduce the outlier pixel values
-        b. Apply z_score_trim on this processed image again
-        c. Standardize and normalize the image using cv2
-        d. Perform Canny edge detection
-        e. Trim the edges of the image (if chosen)
-    4. Perform Hough Transformation on the Canny edge image to get streak coordinates
-    5. Convert streak polar coordinates into cartesian coordinates
-    6. Find the mean coordinates at the edges of the image
-    7. Determine the angle of rotation for the image based on the mean coordinates
-    8. Rotate the image at the determined angle of rotation
-    9. Create plot of median pixel intensity values utilizing the rotated image 
- 
-
-Next steps from here:
-    Quantify brightness and plot a histogram of brightness of the image
 '''
+
 
 import line_detection
 import image_rotation
@@ -33,16 +14,37 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+def pixelplot(rotated_image, title=""): 
+    """Plots a rotated equalized cutout image of a trail 
+    and creates a histogram of the y-axis.
+
+    Image will be equalized using Astropy's HistEqStretch.
+
+    Parameters
+    ----------
+    rotated_image : `numpy.array`
+        Desired image you want to plot.
+    title : `str`, optional
+        Title of the main plot.
+  
+    Returns
+    -------
+    fig : `matplotlib.pyplot.Figure`
+
+    ax1 : `matplotlib.pyplot.Axes`
+        Axis containing the image.
 
 
-def pixelplot(rotated_image, title, detector):
-    stretch = aviz.HistEqStretch(rotated_image)
+    """
+    """stretch = aviz.HistEqStretch(rotated_image)
     norm = aviz.ImageNormalize(rotated_image, stretch=stretch, clip=True)
     histeq = norm(rotated_image)
 
     fig = plt.figure()
     ax1 = fig.add_subplot(211)
-    detector.show(histeq, ax=ax1, title=title)
+    #detector.show(histeq, ax=ax1, title=title)
+    ax1.imshow(histeq)
+    ax1.set_title(title)
     ax1.set_ylabel("Pixel", fontsize=18)
     ax1.axes.xaxis.set_ticklabels([])
 
@@ -50,6 +52,39 @@ def pixelplot(rotated_image, title, detector):
     plt.plot(np.median(rotated_image, axis= 1))
     ax2.set_xlabel("Pixel", fontsize=16)
     ax2.set_ylabel("Counts/pixel", fontsize=18)
+
+    return fig, ax1, ax2"""
+
+    
+
+def pixelplot(rotated_image, title=""): 
+    left, width = 0.1, 0.65
+    bottom, height = 0.1, 1
+    spacing = 0.005
+
+    rect_scatter = [left, bottom, width, height]
+
+    fig = plt.figure(figsize=(8, 8))
+
+    ax = fig.add_axes(rect_scatter)
+
+    stretch = aviz.HistEqStretch(rotated_image)
+    norm = aviz.ImageNormalize(rotated_image, stretch=stretch, clip=True)
+    histeq = norm(rotated_image)
+
+    h,w = rotated_image.shape
+    ax.imshow(histeq, extent = (0, w, 0, h))
+
+    bbox = ax.get_position()
+    rect_histy = [bbox.xmax + spacing, bbox.ymin, 0.2, bbox.ymax - bbox.ymin]
+    ax_histy = fig.add_axes(rect_histy, sharey=ax)
+
+    ax_histy.tick_params(axis="y", labelleft=False)
+
+    ax_histy.plot(np.median(rotated_image, axis= 1), np.arange(0, h))
+
+    return fig, ax, ax_histy
+
 
 
 

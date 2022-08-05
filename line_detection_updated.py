@@ -1,5 +1,5 @@
 '''
-This module creates the functions and class that are used to detect
+This module contains the functions and class that are used to detect
 straight lines in astronomical images.
 
 Process
@@ -24,9 +24,6 @@ import cv2
 from skimage.transform import hough_line, hough_line_peaks
 from sklearn.cluster import MeanShift
 
-# Defining functions
-
-
 def image_mask(img, percent):
     """
     Provides mask coordinates for an image
@@ -41,7 +38,7 @@ def image_mask(img, percent):
 
     Returns
     --------
-    mask coordinates : `int`
+    x_dim_top, x_dim_bottom, y_dim_left, y_dim_right : `tuple`
         coordinates of the numpy array at which masking should be applied
     """
     x_dim_top = int(img.shape[0]*(percent/2))
@@ -66,14 +63,10 @@ def show(img, ax=None, show=True, title=None, **kwargs):
     kwargs : `dict`, optional
         Keyword arguments that are passed to `imshow`.
     """
-
-    # make the plots bigger
-    plt.rcParams["figure.figsize"] = (10, 10)
-
     if ax is None:
         fig, ax = plt.subplots()
 
-    if "uint8" == img.dtype:
+    if img.dtype == "uint8":
         ax.imshow(img, vmin=0, vmax=255, **kwargs)
     ax.imshow(img, **kwargs)
 
@@ -88,17 +81,17 @@ def cluster(cart_coords, lines, bandwidth=50):
 
     Parameters
     ----------
-    cart_coords : 'list'
+    cart_coords : `list`
         List of tuples, each tuple containing a coordinate corresponding to
         the end point of a single estimated line
     lines : `numpy.ndarray`
         Polar coordinates of the detected lines
-    bandwidth: 'int', optional, default=50
+    bandwidth : `int`, optional, default=50
         Provides the bandwidth parameter for MeanShift algorithm
 
     Returns
     --------
-    clusteredLines : `numpy.ndarray`
+    clustered_lines : `numpy.ndarray`
         An array where each row has the polar coordinates of an estimated line
         and the cluster label for that line
     """
@@ -129,48 +122,45 @@ class LineDetection:
     '''
     Applies noise reduction image processing to the raw image, finds edges using Canny and
     detects straight lines using Scikit Image hough_line and hough_line_peaks
-    '''
 
+    Attributes
+    ----------
+    image : `numpy.ndarray`
+        The raw image
+    mask : `bool`, default=False
+        Indicates whether or not to mask the image
+    mask_percent : `float`, default=0.2
+        The proportion of the image's edge to be masked
+    brightness_cuts : `tuple`, default=(2,2)
+        Limits of pixel brightness values that will be cut.
+        Pixels with brightness value larger than `mean - brightness_cuts[0] * std`
+        are set to `mean - brightness_cuts[0] * std`, and pixel values lower than 
+        `mean - brightness_cuts[1] * std` are set to 0
+    thresholding_cut : `float`, default=0.5
+        Applied on the processed image. The pixel intensity at these many standard
+        deviations above the mean becomes the threshold limit. A binary threshold of
+        0/255 is applied at the limit value
+    threshold : `float`, default=0.075
+        The voting threshold for Hough Line Peaks as a proportion of the length of
+        the diagonal
+    flux_prop_thresholds : `list`, default=[0.1,0.2,0.3,1]
+        Lists the possible thresholds for proportion of bright pixels in the image,
+        where a pixel is considered bright if it's intensity is above the mean
+    blur_kernel_sizes : `list`, default=[3,5,9,11]
+        Decides the kernel size for blurring the thresholded image and corresponds
+        element wise to the flux_prop_thresholds list. Must be of the same length
+        as flux_prop_thresholds
+    '''
     # Instatiating constructors
     def __init__(self):
-        '''
-        Initializes the class' parameters
-
-        Parameters
-        ----------
-        image : 'numpy.ndarray'
-            The raw image
-        mask : `bool`, default=False
-            Indicates whether or not to mask the image
-        mask_percent: 'float', default=0.2
-            The proportion of the image's edge to be masked
-        nstd1_cut: 'float', default=2
-            Applied on the raw image. Pixel intensity above these many standard deviations are
-            reduced to the intensity value at that standard deviation. Pixels below these many
-            standard deviations are converted to 0
-        nstd2_binary_cut: 'float', default=0.5
-            Applied on the processed image. The pixel intensity at these many standard
-            deviations above the mean becomes the threshold limit. A binary threshold of
-            0/255 is applied at the limit value
-        threshold: 'float', default=0.075
-            The voting threshold for Hough Line Peaks as a proportion of the length of
-            the diagonal
-        flux_prop_thresholds: 'list', default=[0.1,0.2,0.3,1]
-            Lists the possible thresholds for proportion of bright pixels in the image,
-            where a pixel is considered bright if it's intensity is above the mean
-        blur_kernel_sizes: 'list', default=[3,5,9,11]
-            Decides the kernel size for blurring the thresholded image and corresponds
-            element wise to the flux_prop_thresholds list. Must be of the same length
-            as flux_prop_thresholds
-        '''
         # Assign the raw image
         self.image = None
 
         # Image processing parameters
         self.mask = False
         self.mask_percent = 0.2
-        self.nstd1_cut = 2
-        self.nstd2_binary_cut = 0.5
+        self.brightness_cuts = (2,2)
+        self.thresholding_cut = 0.5
 
         # Line detection parameters
         self.threshold = 0.075
@@ -181,31 +171,37 @@ class LineDetection:
 
     def process_image(self):
         '''
-        Processes the raw image for hough_lines
-
-        Parameters
-        ----------
-        self : 'class'
-            The LineDetection class to use its __init__ parameters
+        Processes the raw image for hough_lines, using the following steps:
+            1. Makes brightness cuts in the raw image
+            2. Reduces the outlier values based on those brightness cuts
+            3. Standardizes the image and fits it to 0-255 range
+            4. Thresholds the image to 0 or 255 pixel values
+            5. Performs optional masking of the edges
+            6. Blurs the image
+            7. Finds edges
 
         Returns
         -------
-        thresholded_image: 'numpy.ndarray'
+        thresholded_image : `numpy.ndarray`
             The image after applying brightness cuts and thresholding on
             the raw image
-        blurred_image: 'numpy.ndarray'
+        blurred_image : `numpy.ndarray`
             The image after applying blurring to the thresholded image
-        edges: 'numpy.ndarray'
+        edges : `numpy.ndarray`
             The Canny edge detected image on which hough_lines would
             be applied
+        
+        See Also
+        --------
+        line_detection_updated.LineDetection.hough_transformation
         '''
         trimmed_image = self.image
 
-        # Making first cuts in the image
+        # Making first brightness cuts in the image
         # Outliers on the positive side take the value of the cut.
         # Outliers on the negative side take the value 0
-        up_limit = trimmed_image.mean() + self.nstd1_cut*trimmed_image.std()
-        low_limit = trimmed_image.mean() - self.nstd1_cut*trimmed_image.std()
+        up_limit = trimmed_image.mean() + self.brightness_cuts[0]*trimmed_image.std()
+        low_limit = trimmed_image.mean() - self.brightness_cuts[1]*trimmed_image.std()
         trimmed_image[trimmed_image > up_limit] = up_limit
         trimmed_image[trimmed_image <= low_limit] = 0
 
@@ -218,14 +214,13 @@ class LineDetection:
                            / (processed_image.max() - processed_image.min()))
 
         # Thresholding the processed image
-        limit = processed_image.mean() + self.nstd2_binary_cut*processed_image.std()
+        limit = processed_image.mean() + self.thresholding_cut*processed_image.std()
         threshold, thresholded_image = cv2.threshold(processed_image, limit, 255, cv2.THRESH_BINARY)
         thresholded_image = cv2.convertScaleAbs(thresholded_image)
 
         # Masking image to remove any borders
         if self.mask is True:
             x_top, x_bottom, y_left, y_right = image_mask(thresholded_image, self.mask_percent)
-
             thresholded_image = thresholded_image[x_top:x_bottom, y_left:y_right]
 
         # Deciding Kernel size of blur based on amount of noise
@@ -251,24 +246,19 @@ class LineDetection:
         '''
         Detects the straight lines in an image
 
-        Parameters
-        ----------
-        self : 'class'
-            The LineDetection class to use its __init__ parameters
-
         Returns
         -------
-        lines: 'numpy.ndarray'
+        lines : `numpy.ndarray`
             The polar coordinates of detected lines
-        angles_list: 'list'
+        angles_list : `list`
             List of angles (in radians) for each detected line
-        cart_coords_list: 'list'
+        cart_coords_list : `list`
             List of endpoint cartesian coordinates for each detected line
-        thresholded_image: 'numpy.ndarray'
+        thresholded_image : `numpy.ndarray`
             The thresholded image from process_image returns
-        blurred_image: 'numpy.ndarray'
+        blurred_image : `numpy.ndarray`
             The blurred image from process_image returns
-        edges: 'numpy.ndarray'
+        edges : `numpy.ndarray`
             The Canny edge detected image from process_image returns
         '''
 

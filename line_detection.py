@@ -24,10 +24,142 @@ Next steps from here:
 '''
 
 #Importing necessary libraries
+from concurrent.futures import process
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 
+#Defining functions
+
+def show(img, ax=None, show=True, title=None, **kwargs):
+#Display an image based on a numpy array in matplotlib
+    
+    print(type(img))
+    print(img.shape)
+    # make the plots bigger
+    plt.rcParams["figure.figsize"] = (10,10)
+
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    if "uint8" == img.dtype:
+        ax.imshow(img, vmin=0, vmax=255, **kwargs)
+    ax.imshow(img, **kwargs)
+
+    ax.set_title(title, fontsize=22)
+
+    return ax
+
+def plot_hist(img):
+#Plot a histogram
+    """Plot a histogram of an image. """
+    plt.hist(img.ravel(), bins=255)
+    plt.xlabel("Brightness level [0-255]")
+    plt.ylabel("Pixel count")
+    plt.show()
+
+def image_mask(img,percent):
+    #Masks the edges of the image
+
+    mask = np.zeros(img.shape, dtype = int)
+        
+    x_dim_top = int(img.shape[0]*(percent/2))
+    x_dim_bottom = int(img.shape[0]*(1-percent/2))
+    y_dim_left = int(img.shape[1]*(percent/2))
+    y_dim_right = int(img.shape[1]*(1-percent/2))
+    
+    return x_dim_top,x_dim_bottom,y_dim_left,y_dim_right
+
+def get_coord(image, rho, theta):
+    '''Finds Cartesian Coordinates of a line at the edge of image given the radius and angle
+    in Polar Coordinates
+    
+    Parameters
+    __________
+    rho : 'float'
+    Radius of detected line in Polar Coordinates
+    
+    theta : 'float'
+    Angle of detected line in Polar Coordinates
+    '''
+
+    x_size = image.shape[1]
+    y_size = image.shape[0]
+
+    #first guess coordinates if they are within the boundaries of the image
+    x1, y1 = (0, rho / np.sin(theta))
+    x2, y2 = (rho / np.cos(theta), 0)
+
+    slope = y1 / x2
+
+    #adjust coordinates to certainly fit within the boundaries of the image
+    if x2 > x_size:
+        x2 = x_size
+        y2 = (-1 * (np.cos(theta) / np.sin(theta)) * x2) + (rho / np.sin(theta))
+        #formula can be found on opencv2 Hough Transform tutorial
+    
+    if y1 > y_size:
+        y1 = y_size
+        x1 = (-1 * (np.sin(theta) / np.cos(theta)) * y1) + (rho / np.cos(theta))
+    
+    return [x1, y1], [x2, y2]
+
+def erode_image(image, kernel):
+
+    kernel = np.ones(kernel, dtype="uint8")
+    eroded_image = cv2.erode(image, kernel)
+
+    return eroded_image
+
+def draw_lines(lines, image, nlines=-1, color=(255, 255, 255), lw=2):
+    """
+    Draws Hough lines on a given image.
+
+    Parameters
+    ----------
+    lines : `cv2.HoughLines`
+        2D array of line parameters, line parameters are stored in [0][x] as
+        tuples.
+    image : `np.array`
+        Image on which to draw the lines
+    nlines : `int` or `slice`
+        Number of top-voted for lines to draw, or a slice object corectly 
+        indexing the lines array. By default draws all lines.
+    color : `tuple`
+        Tuple of values defining a BGR color.
+    lw : `int`
+        Line width.
+    """
+
+    # Create a blank image to draw on
+    draw_im = np.zeros(image.shape, dtype=np.uint8)
+
+    #Get the polar coordinates and convert to cartesian coordinates
+    if len(lines) == 1:
+        rho = lines[0][0][0]
+        theta = lines[0][0][1]
+
+        point_1, point_2 = get_coord(image, rho, theta)
+        point_1, point_2 = np.array(point_1, dtype=int),  np.array(point_2, dtype=int)
+        try:
+            cv2.line(draw_im, point_1.astype("int"), point_2.astype("int"), (255,255,255), 2)
+        except:
+            print(f"Failed to draw line ({point_1},  {point_2})")        
+    
+
+    else:
+        for points in lines:
+            point_1, point_2 = get_coord(image, points[0][0], points[0][1])
+            point_1, point_2 = np.array(point_1, dtype=int),  np.array(point_2, dtype=int)
+            try:
+                cv2.line(draw_im, point_1.astype("int"), point_2.astype("int"), (255,255,255), 2)
+            except:
+                print(f"Failed to draw line ({point_1},  {point_2})")        
+
+    
+  
+    return draw_im
+  
 #Create class
 class LineDetection:
     '''
@@ -40,14 +172,13 @@ class LineDetection:
         '''
         image = the image you want to detect streaks in
         
-        trim = Takes True/False. If you want to trim the edges of the image or not
-        trim_percent = percentage of edge you want to trim
+        mask = Takes True/False. If you want to mask the edges of the image or not
+        mask_percent = percentage of edge you want to mask
         
-        nstd1_normalize = Reduce outlier pixel intensities beyond these many standard
+        nstd1_cut = Reduce outlier pixel intensities beyond these many standard
         deviations in the first cut of processing the image
-        nstd2_normalize = Same as above, but for the second cut of image processing
+        nstd2_binary_cut = Binary thresholding of the image, after the image has been fit to a 0-255 range
         
-        keeppercent = Threshold the image to keep the top x percent of pixel intensity values
         
         threshold = the percentage of diagonal length you want to successfully vote 
                     a line of pixels as a straight line streak
@@ -56,168 +187,85 @@ class LineDetection:
         self.image = None
         
         #Image processing parameters
-        self.trim = None
-        self.trim_percent = None
-        self.nstd1_normalize = None
-        self.nstd2_normalize = None
-        self.keeppercent = None
+        self.mask = None
+        self.mask_percent = None
+        self.nstd1_cut = None
+        self.nstd2_binary_cut = None
+        self.erode = None
+        self.erode_threshold = None
         
         #Line detection parameters
         self.threshold = None
-    
-    def parameters(self):
-        print("Please initiate the following parameters:\n")
-        print("image = the image you want to detect streaks in \n")
-        print("trim = Takes True/False. If you want to trim the edges of the image or not \n")
-        print("trim_percent = percentage of edge you want to trim \n")
-        print("nstd1_normalize = Reduce outlier pixel intensities beyond these many standard deviations in the first cut of processing the image \n")
-        print("nstd2_normalize = Same as above, but for the second cut of image processing \n")
-        print("keeppercent = Threshold the image to keep the top x percent of pixel intensity values \n")
-        print("threshold = the percentage of diagonal length you want to successfully vote a line of pixels as a straight line streak \n")
 
-    def show(self,img, ax=None, show=True, title=None, **kwargs):
-    #Display an image based on a numpy array in matplotlib
-        
-        print(type(img))
-        print(img.shape)
-        # make the plots bigger
-        plt.rcParams["figure.figsize"] = (10,10)
-
-        if ax is None:
-            fig, ax = plt.subplots()
-
-        ax.imshow(img, **kwargs)
-        ax.set_title(title, fontsize=22)
-
-        return ax
-  
-    def plot_hist(img):
-    #Plot a histogram
-        """Plot a histogram of an image. """
-        plt.hist(img.ravel(), bins=255)
-        plt.xlabel("Brightness level [0-255]")
-        plt.ylabel("Pixel count")
-        plt.show()
-
-    #Define functions to process the image
-    def z_score_trim(self,image, nstd, set_to_limits=None):
-        #Standardizing the image to remove outlier pixel intensity values
-                
-        mean = image.mean()
-        std = image.std()
-
-        upperz = mean + nstd*std
-        lowerz = mean - nstd*std
-
-        if set_to_limits is None:
-            upper = upperz
-            lower = lowerz
-        else:
-            upper, lower = set_to_limits
-
-        image[image > upperz] = upper
-        image[image < lowerz] = lower
-
-        return image
-
-    def keep_top_percent(self,image, keep_percent):
-        #Thresholding the standardized image 
-        #(Assumption: Streaks are the brightest objects in the image)
-
-        hist, bars = np.histogram(image, "auto", density=True)
-        cdf = np.cumsum(hist*np.diff(bars))
-        cutoff = np.where(cdf > 1-keep_percent)[0][0]
-        image[image < bars[cutoff]] = 0
-
-        return image
-
-    def image_trim(self,img,percent):
-        #Crops the edges of the image
-        
-        x_dim_left = int(img.shape[0]*(1-percent))
-        x_dim_right = int(img.shape[0]*(percent))
-
-        y_dim_top = int(img.shape[1]*(1-percent))
-        y_dim_bottom = int(img.shape[1]*percent)
-        img = img[x_dim_left:x_dim_right,y_dim_top:y_dim_bottom]
-
-        return img
 
     def process_image(self):
         #Processes the image (see module description for more details)
 
-        processed_image = self.z_score_trim(self.image, self.nstd1_normalize)
-        processed_image = self.z_score_trim(processed_image, self.nstd2_normalize)
-        processed_image = self.keep_top_percent(processed_image, self.keeppercent)
+        trimmed_image = self.image
+        
+        # Making first cuts in the image
+        # Outliers on the positive side take the value of the cut. Outliers on the negative side take the value 0
+        up_limit = trimmed_image.mean() + self.nstd1_cut*trimmed_image.std()
+        low_limit = trimmed_image.mean() - self.nstd1_cut*trimmed_image.std()
+        trimmed_image[trimmed_image > up_limit] = up_limit
+        trimmed_image[trimmed_image <= low_limit] = 0
 
         #Standardizing the image and moving it away from 0
-        processed_image = (processed_image-processed_image.mean())/processed_image.std()
+        processed_image = (trimmed_image-trimmed_image.mean())/trimmed_image.std()
         processed_image -= processed_image.min()
-        processed_image = cv2.normalize(processed_image, processed_image, 0, 255, cv2.NORM_MINMAX)
-        processed_image = cv2.convertScaleAbs(processed_image)
+
+        #Fitting the image to a 0-255 range
+        processed_image = (255*(processed_image - processed_image.min()) )/ (processed_image.max() - processed_image.min())
+
+        #Thresholding the processed image 
+        limit = processed_image.mean() + self.nstd2_binary_cut*processed_image.std()
+        threshold, thresholded_image = cv2.threshold(processed_image, limit, 255, cv2.THRESH_BINARY)
+        thresholded_image = cv2.convertScaleAbs(thresholded_image)
+
+        #Masking image to remove any borders
+        if self.mask == True:
+            x_dim_top,x_dim_bottom,y_dim_left,y_dim_right = image_mask(thresholded_image,self.mask_percent)
+
+            thresholded_image = thresholded_image[x_dim_top:x_dim_bottom,y_dim_left:y_dim_right]
 
 
-        #Creating edges
-        threshold, thresholded_image = cv2.threshold(processed_image, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-        edges = cv2.Canny(thresholded_image, 200, 230)
-        
-        #Cropping image to remove any borders
-        if self.trim == True:
-            edges = self.image_trim(edges,self.trim_percent)
+        #Blur the image
+        blurred_image = cv2.medianBlur(thresholded_image, 3)
+        #blurred_image = cv2.convertScaleAbs(blurred_image)
 
-        return (edges,processed_image, thresholded_image)
+
+        #Performing Canny edge detection
+        edges = cv2.Canny(blurred_image, 0, 200)
+
+        #Detecting Contours 
+        contours, hierarchy = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+        contours_img = np.zeros(edges.shape, dtype=np.uint8)
+
+        #Fitting Minimum area rectangles to the contours
+        ratio_threshold = 3 #Ratio of length to width
+        constant = 0.000001 #To avoid division by 0
+
+        lines = []
+        for cnt in contours: 
+            rect = cv2.minAreaRect(cnt) # [x, y, w, h, theta]
+            box = cv2.boxPoints(rect)
+            box = np.asarray(box, dtype=np.int32)
+            
+            # lines are really long - i.e. one of their sides
+            # is much larger than the other. Let's say if
+            # one of the sides is threshold times the other one
+            # we reject it!
+            (x,y), (w, h), theta = rect
+            if (w/(h+constant) > ratio_threshold) or (h/(w+constant) > ratio_threshold):
+                lines.append(rect)
+                cv2.fillPoly(contours_img, [box], (255, 255, 255))
+
+
+
+        return (thresholded_image, blurred_image, edges, contours_img)
+    
 
     #Define function to draw straight lines in hough transformation
-
-    def draw_lines(self,lines, image, nlines=-1, color=(255, 255, 255), lw=2):
-        """
-        Draws Hough lines on a given image.
-
-        Parameters
-        ----------
-        lines : `cv2.HoughLines`
-            2D array of line parameters, line parameters are stored in [0][x] as
-            tuples.
-        image : `np.array`
-            Image on which to draw the lines
-        nlines : `int` or `slice`
-            Number of top-voted for lines to draw, or a slice object corectly 
-            indexing the lines array. By default draws all lines.
-        color : `tuple`
-            Tuple of values defining a BGR color.
-        lw : `int`
-            Line width.
-        """
-        dimx, dimy = image.shape
-        # convert to color image so that you can see the lines
-        draw_im = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
-
-        if isinstance(nlines, slice):
-            draw = lines[nlines]
-        else:
-            draw = lines[:nlines]
-
-        for params in draw:
-            if len(params[0]) == 2:
-                # this is non-probabilistic hough branch
-                rho, theta = params[0]
-                x0 = np.cos(theta) * rho
-                y0 = np.sin(theta) * rho
-                pt1 = (
-                    int(x0 - (dimx + dimy) * np.sin(theta)),
-                    int(y0 + (dimx + dimy) * np.cos(theta))
-                )
-                pt2 = (
-                    int(x0 + (dimx + dimy) * np.sin(theta)),
-                    int(y0 - (dimx + dimy) * np.cos(theta))
-                )
-                cv2.line(draw_im, pt1, pt2, color, lw)
-            else:
-                # this is probabilistic hough branch
-                cv2.line(draw_im, (params[0, 0], params[0,1]), (params[0, 2], params[0, 3]), color, lw)
-
-        return draw_im
-    
     
     def hough_transformation(self):
         '''
@@ -229,23 +277,44 @@ class LineDetection:
         '''
     
         #Processing the image
-        processed_image_tuple = self.process_image()
+        thresholded_image, blurred_image, edges, contours_img = self.process_image()
         
-        edges, processed, thresholded_image = processed_image_tuple
-        processed_image = processed_image_tuple[1]
-
         #Performing Hough transformation
-        dimx, dimy = processed_image.shape
+        dimx, dimy = self.image.shape
         diagonal = np.sqrt(dimx**2 + dimy**2)
         threshold = int(self.threshold * diagonal)
         print(f"Threshold: {threshold} pixels")
 
-        lines = cv2.HoughLines(processed_image, 1, np.pi/180, threshold)
-        print(f"Found {len(lines)} lines.")
 
-        limg = np.zeros(self.image.shape, dtype=np.uint8)
-        limg = self.draw_lines(lines, limg)
+        #Performing Hough Transformation on both MAR and Canny image
+        lines_mar = cv2.HoughLines(contours_img, 1, np.pi/180, threshold)
+        lines_canny = cv2.HoughLines(edges, 1, np.pi/180, threshold)
 
-        return limg,processed,thresholded_image,edges,lines
+        print(f"Found {len(lines_mar)} lines on MAR.")
+        print(f"Found {len(lines_canny)} lines on Canny.")
+        
+        if self.erode == True:
+            if len(lines_mar) > self.erode_threshold:
+                print("Found larger than acceptable number of lines, eroding the image and re-doing Hough Transformation")
+                eroded_img = self.erode_image(thresholded_image)
+
+                lines_eroded = cv2.HoughLines(eroded_img, 1, np.pi/180, int(threshold/2))
+
+                print(f"Found {len(lines_eroded)} lines.")
+
+        
+        
+        limg_mar = np.zeros(self.image.shape, dtype=np.uint8)
+        limg_canny = np.zeros(self.image.shape, dtype=np.uint8)
+        limg_eroded = np.zeros(self.image.shape, dtype=np.uint8)
+
+        limg_mar = draw_lines(lines_mar, limg_mar)
+        limg_canny = draw_lines(lines_canny, limg_canny)
+
+        if self.erode == True:
+            limg_eroded = draw_lines(lines_eroded, limg_eroded)
+
+        return limg_mar,limg_canny,limg_eroded, thresholded_image, blurred_image, edges, contours_img, lines_mar, lines_canny 
+
 
 

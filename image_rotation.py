@@ -1,46 +1,39 @@
-'''
+"""
 Author: Kilando Chambers
 
-This module contains the image rotation class that can be used to rotate the
-an image containing a streak such that the streak is horizontal, or parllel with
+This module contains multiple functions that can be used to rotate 
+an image containing a streak or multiple streaks such that the streak is horizontal, or parllel with
 the x-axis.  Use the line_detection_testing.ipynb file to import this module and 
 apply it on multiple images.
 
 Process (in development currently):
-    1. Declare init variables (see description of parameters within the class)
-    2. Choose image
-    3. Process the image:
+    1. Choose image
+    2. Process the image:
         a. Apply z_score_trim once to reduce the outlier pixel values
         b. Apply z_score_trim on this processed image again
         c. Standardize and normalize the image using cv2
         d. Perform Canny edge detection
         e. Trim the edges of the image (if chosen)
-    4. Perform Hough Transformation on the Canny edge image to get streak coordinates
-    5. Convert streak polar coordinates into cartesian coordinates
-    6. Find the mean coordinates at the edges of the image
-    7. Determine the angle of rotation for the image based on the mean coordinates
-    8. Rotate the image at the determined angle of rotation
+    3. Perform Hough Transformation on the Canny edge image to get streak coordinates
+    4. Convert streak polar coordinates into cartesian coordinates for each cluster
+    5. Find the mean coordinates at the edges of the image for each cluster of hough lines
+    6. Determine the angle of rotation of each cluster of hough lines for the image based on the mean coordinates
+    7. Rotate the image for each cluster at the determined angle of rotation
+"""
 
-Next steps from here:
-    Plot a histogram of the brightness of the image
-'''
-
-#Importing necessary libraries
-from tkinter import N
 import numpy as np
-import matplotlib.pyplot as plt
 import cv2
 
 
 def get_coord(rho, theta, image):
-    '''Finds Cartesian Coordinates of a line at the edge of image given the radius and angle
+    """Finds Cartesian Coordinates of a line at the edge of image given the radius and angle
     in Polar Coordinates
     
     Parameters
     __________
-    rho : 'float'
+    rho : `float`
         Radius of detected line in Polar Coordinates
-    theta : 'float'
+    theta : `float`
         Angle of detected line in Polar Coordinates
 
      Returns
@@ -49,7 +42,7 @@ def get_coord(rho, theta, image):
         Pair of `(x1, y1)` pixel coordinates where line enters image.
     p2 : `list`
         Pair of `(x2, y2)` pixel coordinates where line exits image.
-    '''
+    """
 
     x_size = image.shape[1]
     y_size = image.shape[0]
@@ -75,32 +68,32 @@ def get_coord(rho, theta, image):
     return final_coord
 
 def coord_all_lines(polar_coor, image):
-    '''Calls get_coord function to create a list of cartesian coordinates converted
+    """Calls get_coord function to create a list of cartesian coordinates converted
     from polar coordinates
     
     Parameters
     __________
-    polar_coor : 'list' or 'array'
+    polar_coor : `list' or `array`
         List of Polar Coordinates in a cluster
-    image : '2D matrix'
+    image : `2D matrix`
         Image containing the streaks of interest
 
     Returns
     __________
     coordinates : `list`
         List of [(x1,y1), (x2,y2)] cartesian coordinates 
-    '''
+    """
 
     #takes list of (rho, theta) coordinates and returns a list of converted cartesian coordinates
     coordinates = [get_coord(line[0],line[1], image) for line in polar_coor]
     return coordinates
 
 def summarized_coordinates(coordinates):
-    '''Finds mean edge cartesian coordinates of all lines in a cluster
+    """Finds mean edge cartesian coordinates of all lines in a cluster
     
     Parameters
     __________
-    coordinates : 'list'
+    coordinates : `list`
         List of two pair of cartesian coordinates for each line, where one pair is where
         the streak enters the image and the other is where the streak exits the image
     
@@ -109,7 +102,7 @@ def summarized_coordinates(coordinates):
     coordinates : `list`
         [(x1,y1), (x2,y2)], which represents the mean entrance and exit points for all lines
         in the cluster   
-    '''
+    """
 
     #creates a single list with clusters of x1, y1, x2, y2 values
     points_sep = [points[i][j] for i in range(2) for j in range(2) for points in coordinates]
@@ -122,13 +115,13 @@ def summarized_coordinates(coordinates):
     return [summ_coor[0], summ_coor[1]], [summ_coor[2], summ_coor[3]]
 
 def determine_rotation_angle(coor_1, coor_2):
-    '''Finds angle at which to rotate the image
+    """Finds angle at which to rotate the image
     
     Parameters
     __________
-    coor_set1 : 'tuple'
+    coor_set1 : `tuple`
         Any set of cartesian coordinates that lie on the line at which the image is to be rotated 
-    coor_set2 : 'tuple'
+    coor_set2 : `tuple'
         Any set of cartesian coordinatets unequal to the first set of coordinates that lie on the line at
         which the image is to be rotated
     
@@ -137,12 +130,11 @@ def determine_rotation_angle(coor_1, coor_2):
     angle : `float`
         Angle, in degrees, at which the image should be rotated so the streak of interest will be parallel
         with the x-axis
-    '''
+    """
 
     #trigonometry
     if coor_1[0] - coor_2[0] == 0:
         angle = np.pi / 2
-
     else: 
         slope = (coor_1[1] - coor_2[1]) / (coor_1[0] - coor_2[0])
         angle = np.arctan(slope)
@@ -153,17 +145,17 @@ def determine_rotation_angle(coor_1, coor_2):
     return angle
 
 def rotate_image(image, angle, coordinates):
-    '''Rotates an image containing a streak about that streak's midpoint and determined
+    """Rotates an image containing a streak about that streak's midpoint and determined
     angle of rotation and crops that image for further analysis
     
     Parameters
     __________
-    image : '2D matrix'
+    image : `2D matrix`
         Image containing the streaks of interest  
-    angle : 'float'
+    angle : `float`
         Angle at which a particular streak is to be rotated such that the streak is parallel with
         the x-axis of the image
-    coordinates: 'list'
+    coordinates: `list`
         A list of length two with the entrance and exit cartesian coordinates of the streak of interest
     
     Returns
@@ -171,7 +163,7 @@ def rotate_image(image, angle, coordinates):
     rotated_image : `2D matrix`
         Image containing the streak of interest rotated such that it is parallel with the x-axis and cropped
         to reduce noise
-    '''
+    """
 
     #finding midpoint of line to find point of rotation
     #because pixels have to be integers, this midpoint will be an estimate      
@@ -194,23 +186,23 @@ def rotate_image(image, angle, coordinates):
     return rotated_image
 
 def rotate_img_clustered(clustered_lines, angles, image):
-    '''Creates a rotated image for each cluster of lines
+    """Creates a rotated image for each cluster of lines
     
     Parameters
     __________
-    clustered_lines : 'array'
+    clustered_lines : `array`
         Array of lines with each row corresponding to a single houghline, the first column corresponding to rho, 
         the second column corresponding to theta, and the third column corresponding to the cluster
-    angle : 'array'
+    angle : `array`
         Array of angles determined by sckit image for each houghline
-    image: '2D Matrix'
+    image: `2D Matrix`
         An image containing the streaks of interest
     
     Returns
     __________
-    rot_images: `list'
+    rot_images: `list`
         List of 2D matrices, each 2D matrix represents a rotated image of a single cluster
-    '''
+    """
 
     rot_images = []
     ncluster = int(max(clustered_lines[:,2])) + 1
@@ -226,7 +218,6 @@ def rotate_img_clustered(clustered_lines, angles, image):
             coord = get_coord(rho = cur_cluster[0][0], theta = cur_cluster[0][1], image = image)
             rotated_image = rotate_image(image, angle  = cur_angle, coordinates = coord)
             rot_images.append(rotated_image)
-
         else:
             list_coord = coord_all_lines(cur_cluster, image)
             coord = summarized_coordinates(list_coord)
@@ -235,9 +226,3 @@ def rotate_img_clustered(clustered_lines, angles, image):
             rot_images.append(rotated_image)
 
     return rot_images
-
-        
-        
-
-
-        

@@ -302,6 +302,12 @@ class LineDetection:
             (x0, y0) = dists[i] * np.array([np.cos(angles[i]), np.sin(angles[i])])
             cart_coords_list.append((x0, y0))
             angles_list.append(angles[i])
+        
+        detection_dict = {"Lines": lines,
+                        "Angles": angles_list,
+                        "Cartesian Coordinates": cart_coords_list,
+                        "Thresholded Image": thresholded_image,
+                        "Blurred Image" : blurred_image, 
+                        "Edges" : edges}
 
-        return lines, angles_list, cart_coords_list, thresholded_image, \
-            blurred_image, edges
+        return detection_dict

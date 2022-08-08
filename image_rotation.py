@@ -217,6 +217,9 @@ def rotate_img_clustered(clustered_lines, angles, image):
     rot_images = []
     ncluster = int(max(clustered_lines[:, 2])) + 1
 
+    clustered_lines = np.array(clustered_lines)
+    angles = np.array(angles)
+
     for i in range(ncluster):
         cur_cluster = clustered_lines[clustered_lines[:, 2] == i][:, 0:2]
 

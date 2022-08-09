@@ -1,5 +1,6 @@
 import line_detection_updated as ld
 import image_rotation as ir
+import gaussian
 from astropy.io import fits
 import astropy.visualization as aviz
 import os
@@ -38,29 +39,64 @@ def satmetrics(filepath):
 
     detector = ld.LineDetection() # need configuration from file
 
+    valid_streaks = {}
+
     for i in images_indices:
+
+        # Performing Hough Transformation
         detector.image = images[i].data.copy()
         results_hough_transform = detector.hough_transformation()
         clustered_lines = ld.cluster(results_hough_transform["Cartesian Coordinates"], results_hough_transform["Lines"])
+        subfile_identifier = filename + '-' + str(i)
 
+        #Rotating the image for analysis
         rotated_images = ir.rotate_img_clustered(clustered_lines = clustered_lines,
                                                 angles = results_hough_transform["Angles"], 
                                                 image = results_hough_transform["Thresholded Image"])
 
-        identifier = filename + str(i)
+        valid_streaks_image = {}
 
-        #Add the final relevant results
-        '''
-        results_dict = {'file_identifier':identifier,
-                        'line_polar_coordinates':,
-                        'FWHM':,
-                        'sigma':,
-                        'amp':,
-                        'mean':,
-                        'magnitude':}
+        #Validating streaks and getting metrics
+        for j in range(len(rotated_images)):
+            valid, a, mu, sigma, fwhm = gaussian.fit_image(rotated_images[j])
+            image_results = {'amplitude':a, 
+                            'mean_brightness': mu,
+                            'sigma':sigma,
+                            'fwhm': fwhm}
 
-
+            if valid:
+                valid_streaks_image['j'] = image_results
         
-        '''
+        valid_streaks['subfile_identifier'] = valid_streaks_image
+    
+    return valid_streaks, images
 
-    #return results_dict
+    
+if __name__ == '__main__':
+    provided_files = ['Data/calexp-0941420_07.fits', 'Data/calexp-0941422_33.fits'] #For now, user to provide files
+    files = provided_files      
+    results = {}
+    for filepath in files:
+        streak_results, all_images = satmetrics(filepath)
+        results['filepath': streak_results]
+        print(f"Main file = {filepath}")
+        print(f"This file contains {len(all_images)} science images")
+
+        for subfile in streak_results.keys():
+            print(f"sub-file name = {subfile}")
+            print(f"This image has {len(streak_results[subfile].keys())} valid streaks")
+
+            for streak in streak_results[subfile].keys():
+                print(f"streak - {streak}")
+                streak_properties = streak_results[subfile][streak]
+                print(f"streak amplitude = {streak_properties['amplitude']}")
+                print(f"streak mean brightness = {streak_properties['mean_brightness']}")
+                print(f"streak width = {streak_properties['sigma']}")
+                print(f"streak fwhm = {streak_properties['fwhm']}")
+
+
+
+
+
+
+

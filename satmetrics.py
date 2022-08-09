@@ -4,6 +4,22 @@ import gaussian
 from astropy.io import fits
 import astropy.visualization as aviz
 import os
+import argparse
+
+#Parsing the arguments to import data files
+parser = argparse.ArgumentParser()
+parser.add_argument('data_files', type=str, help='paths to the data files')
+
+def args2data(parser):
+    '''
+    Parse the filenames from data_files
+    '''
+    input_file = parser.data_files
+
+    with open(input_file, 'r') as f:
+        files = f.read().splitlines()
+
+    return files
 
 def file_ingest(filepath):
     if not os.path.isfile(filepath):
@@ -72,7 +88,11 @@ def satmetrics(filepath):
     return valid_streaks, images
 
 if __name__ == '__main__':
-    provided_files = ['Data/calexp-0941420_07.fits', 'Data/calexp-0941422_33.fits'] #For now, user to provide files
+    
+    args = parser.parse_args()
+    provided_files = args2data(args)
+    print(provided_files)
+    
     files = provided_files      
     results = {}
     for filepath in files:
@@ -93,7 +113,7 @@ if __name__ == '__main__':
                 print(f"streak width = {streak_properties['sigma']}")
                 print(f"streak fwhm = {streak_properties['fwhm']}")
 
-
+    
 
 
 

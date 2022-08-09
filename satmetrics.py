@@ -113,10 +113,3 @@ if __name__ == '__main__':
                 print(f"streak mean brightness = {streak_properties['mean_brightness']}")
                 print(f"streak width = {streak_properties['sigma']}")
                 print(f"streak fwhm = {streak_properties['fwhm']}")
-
-    
-
-
-
-
-

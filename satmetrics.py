@@ -52,7 +52,7 @@ def satmetrics(filepath):
         #Rotating the image for analysis
         rotated_images = ir.rotate_img_clustered(clustered_lines = clustered_lines,
                                                 angles = results_hough_transform["Angles"], 
-                                                image = results_hough_transform["Thresholded Image"])
+                                                image = images[i].data)
 
         valid_streaks_image = {}
 
@@ -67,18 +67,17 @@ def satmetrics(filepath):
             if valid:
                 valid_streaks_image['j'] = image_results
         
-        valid_streaks['subfile_identifier'] = valid_streaks_image
+        valid_streaks[subfile_identifier] = valid_streaks_image
     
     return valid_streaks, images
 
-    
 if __name__ == '__main__':
     provided_files = ['Data/calexp-0941420_07.fits', 'Data/calexp-0941422_33.fits'] #For now, user to provide files
     files = provided_files      
     results = {}
     for filepath in files:
         streak_results, all_images = satmetrics(filepath)
-        results['filepath': streak_results]
+        results[filepath] = streak_results
         print(f"Main file = {filepath}")
         print(f"This file contains {len(all_images)} science images")
 

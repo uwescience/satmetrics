@@ -238,6 +238,6 @@ def fit_image(rotated_image):
     r2 = rmsd(x, y, yhat)
     nr2 = nrmsd(x, y, yhat)
 
-    is_streak_okay = validate_streak(a, mu, r2, nr2, x[-1], x[0])
+    is_streak_okay = validate_streak(a, mu, r2, nr2, x[-1], x[0], sigma)
 
     return is_streak_okay, a, mu, sigma, 2.355 * sigma

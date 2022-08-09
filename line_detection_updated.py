@@ -81,7 +81,7 @@ def show(img, ax=None, show=True, title=None, **kwargs):
     return ax
 
 
-def cluster(cart_coords, lines, bandwidth=50):
+def cluster(cart_coords, lines, bandwidth=50, plot_image=False):
     """
     Uses sklean's MeanShift to cluster the endpoint coordinates of detected lines
 
@@ -94,6 +94,8 @@ def cluster(cart_coords, lines, bandwidth=50):
         Polar coordinates of the detected lines
     bandwidth : `int`, optional, default=50
         Provides the bandwidth parameter for MeanShift algorithm
+    plot_image : `bool`, optional, default=False
+        Plots the assigned clusters
 
     Returns
     --------
@@ -113,16 +115,17 @@ def cluster(cart_coords, lines, bandwidth=50):
     labels = clustering.labels_.reshape((len(clustering.labels_), 1))
     clustered_lines = np.hstack((lines, labels))
 
-    # Plot the clusters
-    for lab in set(clustering.labels_):
-        mask = clustering.labels_ == lab
-        x = cart_coords_array[:, 0]
-        y = cart_coords_array[:, 1]
+    if plot_image:
+        # Plot the clusters
+        for lab in set(clustering.labels_):
+            mask = clustering.labels_ == lab
+            x = cart_coords_array[:, 0]
+            y = cart_coords_array[:, 1]
 
-        plt.scatter(x[mask], y[mask], label=lab)
-        plt.xlabel("x coordinate")
-        plt.ylabel("y coordinate")
-        plt.legend()
+            plt.scatter(x[mask], y[mask], label=lab)
+            plt.xlabel("x coordinate")
+            plt.ylabel("y coordinate")
+            plt.legend()
 
     return clustered_lines
 

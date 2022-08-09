@@ -55,7 +55,7 @@ def satmetrics(filepath):
                                                 image = images[i].data)
 
         valid_streaks_image = {}
-
+        
         #Validating streaks and getting metrics
         for j in range(len(rotated_images)):
             valid, a, mu, sigma, fwhm = gaussian.fit_image(rotated_images[j])

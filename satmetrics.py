@@ -68,7 +68,8 @@ def satmetrics(filepath):
         #Rotating the image for analysis
         rotated_images = ir.rotate_img_clustered(clustered_lines = clustered_lines,
                                                 angles = results_hough_transform["Angles"], 
-                                                image = images[i].data)
+                                                image = images[i].data,
+                                                cart_coord=results_hough_transform['Cartesian Coordinates'])
 
         valid_streaks_image = {}
         

@@ -174,6 +174,7 @@ def validate_streak(a, mu, r2, nr2, xmax, xmin, sigma):
     else:
         return False
 
+
 def plot_image_profile(rotated_image, ax=None):
     """Plots the profile of given image array.
 
@@ -221,3 +222,22 @@ def generate_data(x, a, mu, width, noise_level=10):
     noise = np.random.normal(size=(len(y)))/noise_level
     noisy_y = y + noise
     return noisy_y
+
+
+def fit_image(rotated_image):
+    x = np.arange(0, rotated_image.shape[0], 1)
+    y = list(np.median(rotated_image, axis=1))
+
+    try:
+        a, mu, sigma = fit(x, y)
+    except RuntimeError:
+        return False, None, None, None, None
+
+    yhat = gauss(x, a, mu, sigma)
+
+    r2 = rmsd(x, y, yhat)
+    nr2 = nrmsd(x, y, yhat)
+
+    is_streak_okay = validate_streak(a, mu, r2, nr2, x[-1], x[0])
+
+    return is_streak_okay, a, mu, sigma, 2.355 * sigma

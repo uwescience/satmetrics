@@ -8,6 +8,7 @@ This module contains fitting and plotting functionalities.
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.optimize as optim
+import logging
 
 
 def gauss(x, a, mu, width):
@@ -51,7 +52,7 @@ def fit(x, y):
     width : `float`
         The standard deviation.
     """
-    (a, mu, width), unc = optim.curve_fit(gauss, x, y, p0=[200, ((x[-1] - x[0])/2), 50])
+    (a, mu, width), unc = optim.curve_fit(gauss, x, y, p0=[np.max(y), ((x[-1] - x[0])/2), np.max(x)/4])
 
     return a, mu, width
 
@@ -99,7 +100,7 @@ def nrmsd(x, y, yhat):
     return nrmsd/np.mean(y)
 
 
-def plot_profile(x, y, ax=None):
+def plot_profile(x, y, ax=None, debug=False):
     """Plots the profile of given sample coordinates.
 
     Parameters
@@ -129,20 +130,18 @@ def plot_profile(x, y, ax=None):
         yhat = gauss(x, a, mu, width)
         r2 = rmsd(x, y, yhat)
         nr2 = nrmsd(x, y, yhat)
-        is_streak_okay = validate_streak(a, mu, r2, nr2, x[-1], x[0])
-        if is_streak_okay:
-            print("Gaussian fit looks reasonable.")
-            ax.plot(x, yhat, label=f"R2={r2:.3} \n NR2={nr2:.3}", color="red")
-            ax.legend()
-        else:
-            print("Could not fit gaussian to streak profile.")
+        if debug:
+            is_streak_okay = validate_streak(a, mu, r2, nr2, x[-1], x[0], width, debug)
+            ax.text(min(x), max(y), f"Validated: {is_streak_okay}")
+        ax.plot(x, yhat, label=f"R2={r2:.3} \n NR2={nr2:.3}", color="red")
+        ax.legend()
 
     ax.plot(x, y)
 
     return ax
 
 
-def validate_streak(a, mu, r2, nr2, xmax, xmin, sigma):
+def validate_streak(a, mu, r2, nr2, xmax, xmin, sigma, debug=False):
     """Validates whether the plot profile contains a streak we can successfully fit with a gaussian or not.
 
     Parameters
@@ -169,13 +168,20 @@ def validate_streak(a, mu, r2, nr2, xmax, xmin, sigma):
     """
     streak_zero_location = np.abs(mu - ((xmax - xmin) / 2))
     fwhm = 2.355 * sigma
-    if r2 <= 0.1 and nr2 <= 2 and streak_zero_location < 10 and fwhm < 20:
+    if debug:
+        print(f"Distance from middle: {streak_zero_location:.3}")
+        print(f"Full Width Half Max: {fwhm:.3}")
+        print(f"RMSD: {r2:.3}, NRMSD: {nr2:.3}")
+        logging.debug(f"Distance from middle: {streak_zero_location:.3}")
+        logging.debug(f"Full Width Half Max: {fwhm:.3}")
+        logging.debug(f"RMSD: {r2:.3}, NRMSD: {nr2:.3}")
+    if nr2 <= 2 and streak_zero_location < 10 and fwhm < 20:
         return True
     else:
         return False
 
 
-def plot_image_profile(rotated_image, ax=None):
+def plot_image_profile(rotated_image, ax=None, debug=False):
     """Plots the profile of given image array.
 
     Parameters
@@ -193,7 +199,7 @@ def plot_image_profile(rotated_image, ax=None):
     x = np.arange(0, rotated_image.shape[0], 1)
     y = list(np.median(rotated_image, axis=1))
 
-    return plot_profile(x, y, ax)
+    return plot_profile(x, y, ax, debug)
 
 
 def generate_data(x, a, mu, width, noise_level=10):

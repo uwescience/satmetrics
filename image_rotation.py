@@ -26,7 +26,7 @@ import numpy as np
 import cv2
 
 
-def get_coord(rho, theta, image):
+def get_coord(rho, theta, image, scikit_cart_coord):
     """Finds Cartesian Coordinates of a line at the edge of image given the radius and angle
     in Polar Coordinates
 
@@ -49,26 +49,39 @@ def get_coord(rho, theta, image):
     y_size = image.shape[0]
 
     # determine where line would be if it were to hit every edge of the image
-    one = [0, rho / np.sin(theta)]
-    two = [rho / np.cos(theta), 0]
-    three = [x_size, -1 * (np.cos(theta) / np.sin(theta) * x_size) + (rho / np.sin(theta))]
-    four = [(-1 * (np.sin(theta) / np.cos(theta)) * y_size) + (rho / np.cos(theta)), y_size]
+    if theta % np.pi == 0:
+        y = scikit_cart_coord[1]
+        one = [0, y]
+        two = [x_size, y]
+        final_coord = one, two
+        return final_coord
+    elif np.cos(theta) == 0:
+        x = scikit_cart_coord[0]
+        one = [x, 0]
+        two = [x, y_size]
+        final_coord = [one, two]
+        return one, two
+    else:
+        one = [0, rho / np.sin(theta)]
+        two = [rho / np.cos(theta), 0]
+        three = [x_size, -1 * (np.cos(theta) / np.sin(theta) * x_size) + (rho / np.sin(theta))]
+        four = [(-1 * (np.sin(theta) / np.cos(theta)) * y_size) + (rho / np.cos(theta)), y_size]
 
-    # isolate the x values and the y values
-    validate = [one, two, three, four]
-    validate = np.array(validate)
-    val_x = validate[:, 0]
-    val_y = validate[:, 1]
+        # isolate the x values and the y values
+        validate = [one, two, three, four]
+        validate = np.array(validate)
+        val_x = validate[:, 0]
+        val_y = validate[:, 1]
 
-    # determine if the x-values or y-values given are in the boundaries of the image
-    bool_x = [0 <= val_x[i] <= x_size for i in range(4)]
-    bool_y = [0 <= val_y[i] <= y_size for i in range(4)]
-    true_bool = [bool_x[i] & bool_y[i] for i in range(4)]
-    final_coord = validate[true_bool]
-    return final_coord
+        # determine if the x-values or y-values given are in the boundaries of the image
+        bool_x = [0 <= val_x[i] <= x_size for i in range(4)]
+        bool_y = [0 <= val_y[i] <= y_size for i in range(4)]
+        true_bool = [bool_x[i] & bool_y[i] for i in range(4)]
+        final_coord = validate[true_bool]
+        return final_coord
 
 
-def coord_all_lines(polar_coor, image):
+def coord_all_lines(polar_coor, image, sckit_cart_coord):
     """Calls get_coord function to create a list of cartesian coordinates converted
     from polar coordinates
 
@@ -86,7 +99,8 @@ def coord_all_lines(polar_coor, image):
     """
 
     # takes list of (rho, theta) coordinates and returns a list of converted cartesian coordinates
-    coordinates = [get_coord(line[0], line[1], image) for line in polar_coor]
+    coordinates = [get_coord(polar_coor[i][0], polar_coor[i][1], image,
+                             sckit_cart_coord[i]) for i in range(len(polar_coor))]
     return coordinates
 
 
@@ -179,7 +193,6 @@ def rotate_image(image, angle, coordinates):
 
     rotation_x = (coordinates[1][0] + coordinates[0][0]) // 2
     rotation_y = (coordinates[1][1] + coordinates[0][1]) // 2
-
     matrix = cv2.getRotationMatrix2D((rotation_x, rotation_y), angle, 1.0)
     rotated_image = cv2.warpAffine(image, matrix, (image.shape[1], image.shape[0]))
 
@@ -194,7 +207,7 @@ def rotate_image(image, angle, coordinates):
     return rotated_image
 
 
-def rotate_img_clustered(clustered_lines, angles, image):
+def rotate_img_clustered(clustered_lines, angles, image, cart_coord):
     """Creates a rotated image for each cluster of lines
 
     Parameters
@@ -219,20 +232,24 @@ def rotate_img_clustered(clustered_lines, angles, image):
 
     clustered_lines = np.array(clustered_lines)
     angles = np.array(angles)
+    cart_coord = np.array(cart_coord)
 
     for i in range(ncluster):
         cur_cluster = clustered_lines[clustered_lines[:, 2] == i][:, 0:2]
 
         if len(cur_cluster) == 1:
             cur_angle = angles[clustered_lines[:, 2] == i]
+            cur_coord = cart_coord[clustered_lines[:, 2] == i]
             cur_angle = (cur_angle * 180 / np.pi) - 90
             cur_angle = cur_angle[0]
 
-            coord = get_coord(rho=cur_cluster[0][0], theta=cur_cluster[0][1], image=image)
-            rotated_image = rotate_image(image, angle=cur_angle, coordinates=coord)
+            coord = coord_all_lines(polar_coor=cur_cluster, image=image,
+                                    sckit_cart_coord=cur_coord)
+            rotated_image = rotate_image(image, angle=cur_angle, coordinates=coord[0])
             rot_images.append(rotated_image)
         else:
-            list_coord = coord_all_lines(cur_cluster, image)
+            cur_coord = cart_coord[clustered_lines[:, 2] == i]
+            list_coord = coord_all_lines(cur_cluster, image, cur_coord)
             coord = summarized_coordinates(list_coord)
             cur_angle = determine_rotation_angle(coord[0], coord[1])
             rotated_image = rotate_image(image, angle=cur_angle, coordinates=coord)

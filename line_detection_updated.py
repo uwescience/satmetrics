@@ -175,17 +175,17 @@ class LineDetection:
 
     def configure_from_dict(self, config):
         # Image processing parameters
-        self.mask = config.pop("mask",False)
-        self.mask_percent = config.pop("mask_percent",0.2)
-        self.brightness_cuts = config.pop("brightness_cuts",(2,2))
-        self.thresholding_cut = config.pop("thresholding_cut",0.5)
+        self.mask = config.pop("mask", False)
+        self.mask_percent = config.pop("mask_percent", 0.2)
+        self.brightness_cuts = config.pop("brightness_cuts", (2, 2))
+        self.thresholding_cut = config.pop("thresholding_cut", 0.5)
 
         # Line detection parameters
-        self.threshold = config.pop("threshold",0.075)
+        self.threshold = config.pop("threshold", 0.075)
 
         # Blurring parameters
-        self.flux_prop_thresholds = config.pop("flux_prop_thresholds",[0.1,0.2,0.3,1])
-        self.blur_kernel_sizes = config.pop("blur_kernel_sizes",[3,5,9,11])
+        self.flux_prop_thresholds = config.pop("flux_prop_thresholds", [0.1, 0.2, 0.3, 1])
+        self.blur_kernel_sizes = config.pop("blur_kernel_sizes", [3, 5, 9, 11])
 
     def configure_from_file(self, filepath):
         with open(filepath, 'r') as f:
@@ -216,7 +216,7 @@ class LineDetection:
 
         See Also
         --------
-        line_detection_updated.LineDetection.hough_transformation : Hough Line transformation function
+        line_detection_updated.LineDetection.hough_transformation : Hough transformation function
         '''
         trimmed_image = self.image.copy()
 
@@ -316,10 +316,10 @@ class LineDetection:
             angles_list.append(angles[i])
 
         detection_dict = {"Lines": lines,
-                        "Angles": angles_list,
-                        "Cartesian Coordinates": cart_coords_list,
-                        "Thresholded Image": thresholded_image,
-                        "Blurred Image" : blurred_image,
-                        "Edges" : edges}
+                          "Angles": angles_list,
+                          "Cartesian Coordinates": cart_coords_list,
+                          "Thresholded Image": thresholded_image,
+                          "Blurred Image": blurred_image,
+                          "Edges": edges}
 
         return detection_dict

@@ -6,7 +6,6 @@ import sys
 import yaml
 
 from astropy.io import fits
-import astropy.visualization as aviz
 
 import line_detection_updated as ld
 import image_rotation as ir
@@ -14,19 +13,37 @@ import gaussian
 
 handler = logging.StreamHandler(stream=sys.stdout)
 logging.basicConfig(
-    format='%(asctime)s %(message)s', 
-    datefmt='%m/%d/%Y %I:%M:%S %p', 
+    format='%(asctime)s %(message)s',
+    datefmt='%m/%d/%Y %I:%M:%S %p',
     level=logging.INFO,
-    handlers=[handler,]
+    handlers=[handler, ]
     )
 
 
 def file_ingest(filepath):
+    """
+    Takes an input fits file and extracts individual science images from it
+
+    Parameters
+    ----------
+    filepath : `str`
+        The path for the input image
+
+    Returns
+    --------
+    image_list : `list`
+        List of all extracted images
+    image_indices : `list`
+        Indices of extracted images
+    filename : `str`
+        basename of the filepath
+    """
+
     if not os.path.isfile(filepath):
         raise ValueError("File path is not a file. Expected a fits file.")
 
     filename = os.path.basename(filepath)
-    hdul = fits.open(filepath, cache = True)
+    hdul = fits.open(filepath, cache=True)
 
     images = []
     images_index = []
@@ -41,13 +58,34 @@ def file_ingest(filepath):
             else:
                 images.append(i)
                 images_index.append(counter)
-            
-            counter+=1
-    
+
+            counter += 1
+
     return {'image_list': images, 'image_indices': images_index, 'filename': filename}
 
+
 def satmetrics(filepath, config={}):
-    #Ingest the file
+    """
+    Applies Hough transformation, performs image rotation and then finds properties of
+    detected streaks
+
+    Parameters
+    ----------
+    filepath : `str`
+        The path for the input image
+    config : `dict`, optional, default={}
+        Yaml file containing the LineDetection class parameters
+
+    Returns
+    --------
+    valid_streaks : `dict`
+        Nested dictionary containing properties of each valid streak
+        in each image of the input filepath
+    images : `list`
+        Science images extracted from the input file
+    """
+
+    # Ingest the file
     ingest_dict = file_ingest(filepath)
     images_indices = ingest_dict['image_indices']
     images = ingest_dict['image_list']
@@ -61,41 +99,45 @@ def satmetrics(filepath, config={}):
         detector = ld.LineDetection(image=images[i].data)
         if config:
             detector.configure_from_file(config)
-            
-        results_hough_transform = detector.hough_transformation()
-        clustered_lines = ld.cluster(results_hough_transform["Cartesian Coordinates"], results_hough_transform["Lines"])
+
+        results_ht = detector.hough_transformation()
+        clustered_lines = ld.cluster(results_ht["Cartesian Coordinates"],
+                                     results_ht["Lines"])
         subfile_identifier = filename + '-' + str(i)
 
-        #Rotating the image for analysis
-        rotated_images = ir.rotate_img_clustered(clustered_lines = clustered_lines,
-                                                angles = results_hough_transform["Angles"], 
-                                                image = images[i].data,
-                                                cart_coord=results_hough_transform['Cartesian Coordinates'])
+        # Rotating the image for analysis
+        rotated_images = ir.rotate_img_clustered(clustered_lines=clustered_lines,
+                                                 angles=results_ht["Angles"],
+                                                 image=images[i].data,
+                                                 cart_coord=results_ht['Cartesian Coordinates'])
 
         valid_streaks_image = {}
-        
-        #Validating streaks and getting metrics
+
+        # Validating streaks and getting metrics
         streak_counter = 1
         for j in range(len(rotated_images)):
             valid, a, mu, sigma, fwhm = gaussian.fit_image(rotated_images[j])
-            image_results = {'amplitude':a, 
-                            'mean_brightness': mu,
-                            'sigma':sigma,
-                            'fwhm': fwhm}
+            image_results = {'amplitude': a,
+                             'mean_brightness': mu,
+                             'sigma': sigma,
+                             'fwhm': fwhm}
 
             if valid:
                 valid_streaks_image[str(streak_counter)] = image_results
-                streak_counter +=1
-        
+                streak_counter += 1
+
         valid_streaks[subfile_identifier] = valid_streaks_image
-    
+
     return valid_streaks, images
 
+
 if __name__ == '__main__':
-    #Parsing the arguments to import data files
+    # Parsing the arguments to import data files
     parser = argparse.ArgumentParser(description="Detect streaks on input images")
-    parser.add_argument('fits', nargs='+', help='A text file containing a list of fits file or a list of fits files.')
-    parser.add_argument('--config', nargs='?', help="A yaml file containing the Line Detection class parameters.", default={})
+    parser.add_argument('fits', nargs='+',
+                        help='A text file containing a list of fits file or a list of fits files.')
+    parser.add_argument('--config', nargs='?',
+                        help="Yaml file containing the LineDetection class parameters.", default={})
     parser.add_argument('--output', nargs='?', help="A yaml file containing the outputs.")
     args = parser.parse_args()
 
@@ -107,7 +149,7 @@ if __name__ == '__main__':
         if 'fits' in extension:
             files = args.fits
         elif os.path.isfile(file):
-            with open(file,'r') as f:
+            with open(file, 'r') as f:
                 files = f.readlines()
                 files = [x.strip() for x in files]
         else:
@@ -115,7 +157,6 @@ if __name__ == '__main__':
 
     else:
         files = args.fits
-
 
     results = {}
     for filepath in files:
@@ -141,7 +182,7 @@ if __name__ == '__main__':
                 logging.info(f"streak mean brightness = {streak_properties['mean_brightness']}")
                 logging.info(f"streak width = {streak_properties['sigma']}")
                 logging.info(f"streak fwhm = {streak_properties['fwhm']}")
-    
+
     yaml_results = {}
     for filepath in results:
         fname = os.path.basename(filepath)
@@ -154,9 +195,9 @@ if __name__ == '__main__':
                 yaml_results[fname][subfile][id]["amplitude"] = float(val["amplitude"])
                 yaml_results[fname][subfile][id]["mean_brightness"] = float(val["mean_brightness"])
                 yaml_results[fname][subfile][id]["sigma"] = float(val["sigma"])
-                yaml_results[fname][subfile][id]["fwhm"] = float(val["fwhm"]) 
- 
-    #Write out the overall output
+                yaml_results[fname][subfile][id]["fwhm"] = float(val["fwhm"])
+
+    # Write out the overall output
     if args.output is not None:
         with open(args.output, 'w') as outfile:
             yaml.dump(yaml_results, outfile)

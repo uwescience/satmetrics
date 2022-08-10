@@ -9,7 +9,7 @@ def extract_yaml(filepath):
 def print_lines(properties_dict, streak_properties_list):
     properties_string = ''
     for property in streak_properties_list:
-        properties_string += str(properties_dict[property]) + '   '
+        properties_string += str(round(properties_dict[property],2)) + '   '
 
     return properties_string
 
@@ -43,14 +43,19 @@ if __name__ == '__main__':
 
     results_dict = extract_yaml(filepath)
     header = ['main_file', 'sub_file', 'streak_id']
-    header.append(streak_properties_list)
+    for property in streak_properties_list:
+        header.append(property)
 
+    header_string = ''
+    for h in header:
+        header_string += h + '      '
+    
     final_results_list = print_table(results_dict, streak_properties_list)
     outfile = 'results_table.txt'
 
-    write_outfile(outfile, final_results_list, header)
+    write_outfile(outfile, final_results_list, header_string)
 
-    
+
     
 
 

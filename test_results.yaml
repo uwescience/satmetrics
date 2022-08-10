@@ -1,0 +1,14 @@
+calexp-0941420_07.fits:
+  calexp-0941420_07.fits-0:
+    '1':
+      amplitude: 820.7004363309036
+      fwhm: 6.946233634248313
+      mean_brightness: 48.77356317060127
+      sigma: 2.94956842218612
+calexp-0941422_33.fits:
+  calexp-0941422_33.fits-0:
+    '1':
+      amplitude: 822.6462020727093
+      fwhm: 5.555420489005659
+      mean_brightness: 49.825233914591614
+      sigma: 2.3589895919344626

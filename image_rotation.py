@@ -160,6 +160,8 @@ def determine_rotation_angle(coor_1, coor_2):
 
     # converting angle from radians to degrees
     angle = (angle * 180 / np.pi)
+    angle = np.linspace(angle - 1, angle + 1, num = 21)
+    print(len(angle))
 
     return angle
 
@@ -193,18 +195,21 @@ def rotate_image(image, angle, coordinates):
 
     rotation_x = (coordinates[1][0] + coordinates[0][0]) // 2
     rotation_y = (coordinates[1][1] + coordinates[0][1]) // 2
-    matrix = cv2.getRotationMatrix2D((rotation_x, rotation_y), angle, 1.0)
-    rotated_image = cv2.warpAffine(image, matrix, (image.shape[1], image.shape[0]))
+    rotated_images = []
+    for i in angle:
+        matrix = cv2.getRotationMatrix2D((rotation_x, rotation_y), i, 1.0)
+        rotated_image = cv2.warpAffine(image, matrix, (image.shape[1], image.shape[0]))
+        # cropping image
+        distance = np.sqrt((coordinates[1][0] - coordinates[0][0])**2 +
+                        (coordinates[1][1] - coordinates[0][1])**2)
+        if distance < image.shape[1]:
+            rotated_image = rotated_image[int(rotation_y - 50): int(rotation_y + 50), 0: int(distance)]
+        else:
+            rotated_image = rotated_image[int(rotation_y - 50): int(rotation_y + 50)]
+        rotated_images.append(rotated_image)
+    print(len(rotated_images))
 
-    # cropping image
-    distance = np.sqrt((coordinates[1][0] - coordinates[0][0])**2 +
-                       (coordinates[1][1] - coordinates[0][1])**2)
-    if distance < image.shape[1]:
-        rotated_image = rotated_image[int(rotation_y - 50): int(rotation_y + 50), 0: int(distance)]
-    else:
-        rotated_image = rotated_image[int(rotation_y - 50): int(rotation_y + 50)]
-
-    return rotated_image
+    return rotated_images
 
 
 def rotate_img_clustered(clustered_lines, angles, image, cart_coord):
@@ -242,6 +247,7 @@ def rotate_img_clustered(clustered_lines, angles, image, cart_coord):
             cur_coord = cart_coord[clustered_lines[:, 2] == i]
             cur_angle = (cur_angle * 180 / np.pi) - 90
             cur_angle = cur_angle[0]
+            cur_angle = np.linspace(cur_angle - 1, cur_angle + 1, num = 21)
 
             coord = coord_all_lines(polar_coor=cur_cluster, image=image,
                                     sckit_cart_coord=cur_coord)

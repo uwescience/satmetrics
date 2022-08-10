@@ -41,7 +41,7 @@ def image_mask(img, percent):
 
     Returns
     --------
-    x_dim_left : `int` 
+    x_dim_left : `int`
         Left x coordinate of masking rectangle
     x_dim_right : `int`
         Right x coordinate of masking rectangle
@@ -105,7 +105,7 @@ def cluster(cart_coords, lines, bandwidth=50, plot_image=False):
     clustered_lines : `numpy.ndarray`
         An array where each row has the polar coordinates of an estimated line
         and the cluster label for that line
-    
+
     See Also
     --------
     sklearn.cluster.MeanShift : MeanShift clustering algorithm
@@ -150,7 +150,7 @@ class LineDetection:
     brightness_cuts : `tuple`, default=(2,2)
         Limits of pixel brightness values, `(lower, upper)`, that will be cut.
         Pixels with brightness value smaller than `mean - lower * std`
-        are set to 0, and pixel values larger than 
+        are set to 0, and pixel values larger than
         `mean + upper * std` are set to `mean + upper * std`
     thresholding_cut : `float`, default=0.5
         Applied on the processed image. The pixel intensity at these many standard
@@ -213,12 +213,12 @@ class LineDetection:
         edges : `numpy.ndarray`
             The Canny edge detected image on which hough_lines would
             be applied
-        
+
         See Also
         --------
         line_detection_updated.LineDetection.hough_transformation : Hough Line transformation function
         '''
-        trimmed_image = self.image
+        trimmed_image = self.image.copy()
 
         # Making first brightness cuts in the image
         # Outliers on the positive side take the value of the cut.
@@ -283,7 +283,7 @@ class LineDetection:
             The blurred image from process_image returns
         edges : `numpy.ndarray`
             The Canny edge detected image from process_image returns
-        
+
         See Also
         --------
         skimage.transform.hough_line : Scikit Image Hough Line function
@@ -314,12 +314,12 @@ class LineDetection:
             (x0, y0) = dists[i] * np.array([np.cos(angles[i]), np.sin(angles[i])])
             cart_coords_list.append((x0, y0))
             angles_list.append(angles[i])
-        
+
         detection_dict = {"Lines": lines,
                         "Angles": angles_list,
                         "Cartesian Coordinates": cart_coords_list,
                         "Thresholded Image": thresholded_image,
-                        "Blurred Image" : blurred_image, 
+                        "Blurred Image" : blurred_image,
                         "Edges" : edges}
 
         return detection_dict

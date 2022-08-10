@@ -24,6 +24,9 @@ import cv2
 from skimage.transform import hough_line, hough_line_peaks
 from sklearn.cluster import MeanShift
 
+import yaml
+
+
 def image_mask(img, percent):
     """
     Provides mask coordinates for an image
@@ -136,7 +139,7 @@ class LineDetection:
     Applies noise reduction image processing to the raw image, finds edges using Canny and
     detects straight lines using Scikit Image hough_line and hough_line_peaks
 
-    Attributes
+    Parameters
     ----------
     image : `numpy.ndarray`
         The raw image
@@ -165,22 +168,29 @@ class LineDetection:
         as flux_prop_thresholds
     '''
     # Instatiating constructors
-    def __init__(self):
+    def __init__(self, image=None, **kwargs):
         # Assign the raw image
-        self.image = None
+        self.image = image.copy()
+        self.configure_from_dict(kwargs)
 
+    def configure_from_dict(self, config):
         # Image processing parameters
-        self.mask = False
-        self.mask_percent = 0.2
-        self.brightness_cuts = (2,2)
-        self.thresholding_cut = 0.5
+        self.mask = config.pop("mask",False)
+        self.mask_percent = config.pop("mask_percent",0.2)
+        self.brightness_cuts = config.pop("brightness_cuts",(2,2))
+        self.thresholding_cut = config.pop("thresholding_cut",0.5)
 
         # Line detection parameters
-        self.threshold = 0.075
+        self.threshold = config.pop("threshold",0.075)
 
         # Blurring parameters
-        self.flux_prop_thresholds = [0.1, 0.2, 0.3, 1]
-        self.blur_kernel_sizes = [3, 5, 9, 11]
+        self.flux_prop_thresholds = config.pop("flux_prop_thresholds",[0.1,0.2,0.3,1])
+        self.blur_kernel_sizes = config.pop("blur_kernel_sizes",[3,5,9,11])
+
+    def configure_from_file(self, filepath):
+        with open(filepath, 'r') as f:
+            config = yaml.safe_load(f)
+        self.configure_from_dict(config)
 
     def process_image(self):
         '''
@@ -294,7 +304,6 @@ class LineDetection:
 
         # Retriving the peaks
         accum, angles, dists = hough_line_peaks(h, theta, d, threshold=thresh)
-        print(f"Found {len(dists)} lines.")
 
         # Finding the cartesian coordinates and storing the returns
         lines = np.vstack((dists, angles)).T

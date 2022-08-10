@@ -1,25 +1,25 @@
+import os
+import argparse
+import logging
+import traceback
+import sys
+import yaml
+
+from astropy.io import fits
+import astropy.visualization as aviz
+
 import line_detection_updated as ld
 import image_rotation as ir
 import gaussian
-from astropy.io import fits
-import astropy.visualization as aviz
-import os
-import argparse
 
-#Parsing the arguments to import data files
-parser = argparse.ArgumentParser()
-parser.add_argument('data_files', type=str, help='paths to the data files')
+handler = logging.StreamHandler(stream=sys.stdout)
+logging.basicConfig(
+    format='%(asctime)s %(message)s', 
+    datefmt='%m/%d/%Y %I:%M:%S %p', 
+    level=logging.INFO,
+    handlers=[handler,]
+    )
 
-def args2data(parser):
-    '''
-    Parse the filenames from data_files
-    '''
-    input_file = parser.data_files
-
-    with open(input_file, 'r') as f:
-        files = f.read().splitlines()
-
-    return files
 
 def file_ingest(filepath):
     if not os.path.isfile(filepath):
@@ -46,21 +46,22 @@ def file_ingest(filepath):
     
     return {'image_list': images, 'image_indices': images_index, 'filename': filename}
 
-def satmetrics(filepath):
+def satmetrics(filepath, config={}):
     #Ingest the file
     ingest_dict = file_ingest(filepath)
     images_indices = ingest_dict['image_indices']
     images = ingest_dict['image_list']
     filename = ingest_dict['filename']
 
-    detector = ld.LineDetection() # need configuration from file
-
     valid_streaks = {}
 
     for i in images_indices:
 
         # Performing Hough Transformation
-        detector.image = images[i].data.copy()
+        detector = ld.LineDetection(image=images[i].data)
+        if config:
+            detector.configure_from_file(config)
+            
         results_hough_transform = detector.hough_transformation()
         clustered_lines = ld.cluster(results_hough_transform["Cartesian Coordinates"], results_hough_transform["Lines"])
         subfile_identifier = filename + '-' + str(i)
@@ -74,6 +75,7 @@ def satmetrics(filepath):
         valid_streaks_image = {}
         
         #Validating streaks and getting metrics
+        streak_counter = 1
         for j in range(len(rotated_images)):
             valid, a, mu, sigma, fwhm = gaussian.fit_image(rotated_images[j])
             image_results = {'amplitude':a, 
@@ -82,34 +84,79 @@ def satmetrics(filepath):
                             'fwhm': fwhm}
 
             if valid:
-                valid_streaks_image['j'] = image_results
+                valid_streaks_image[str(streak_counter)] = image_results
+                streak_counter +=1
         
         valid_streaks[subfile_identifier] = valid_streaks_image
     
     return valid_streaks, images
 
 if __name__ == '__main__':
-    
+    #Parsing the arguments to import data files
+    parser = argparse.ArgumentParser(description="Detect streaks on input images")
+    parser.add_argument('fits', nargs='+', help='A text file containing a list of fits file or a list of fits files.')
+    parser.add_argument('--config', nargs='?', help="A yaml file containing the Line Detection class parameters.", default={})
+    parser.add_argument('--output', nargs='?', help="A yaml file containing the outputs.")
     args = parser.parse_args()
-    provided_files = args2data(args)
-    print(provided_files)
-    
-    files = provided_files      
+
+    if len(args.fits) == 1:
+        file = args.fits[0]
+        filename = os.path.basename(file)
+        extension = ".".join(filename.split(".")[1:])
+
+        if 'fits' in extension:
+            files = args.fits
+        elif os.path.isfile(file):
+            with open(file,'r') as f:
+                files = f.readlines()
+                files = [x.strip() for x in files]
+        else:
+            raise ValueError("Expcted a path to fits file or a path to a text file.")
+
+    else:
+        files = args.fits
+
+
     results = {}
     for filepath in files:
-        streak_results, all_images = satmetrics(filepath)
+        try:
+            streak_results, all_images = satmetrics(filepath, args.config)
+        except ValueError as e:
+            logging.error(f"Skipping {filepath} due to: {e} ")
+            logging.error(traceback.format_exc())
+            continue
+
         results[filepath] = streak_results
-        print(f"Main file = {filepath}")
-        print(f"This file contains {len(all_images)} science images")
+        logging.info(f"Main file = {filepath}")
+        logging.info(f"This file contains {len(all_images)} science images")
 
         for subfile in streak_results.keys():
-            print(f"sub-file name = {subfile}")
-            print(f"This image has {len(streak_results[subfile].keys())} valid streaks")
+            logging.info(f"sub-file name = {subfile}")
+            logging.info(f"This image has {len(streak_results[subfile].keys())} valid streaks")
 
             for streak in streak_results[subfile].keys():
-                print(f"streak - {streak}")
+                logging.info(f"streak - {streak}")
                 streak_properties = streak_results[subfile][streak]
-                print(f"streak amplitude = {streak_properties['amplitude']}")
-                print(f"streak mean brightness = {streak_properties['mean_brightness']}")
-                print(f"streak width = {streak_properties['sigma']}")
-                print(f"streak fwhm = {streak_properties['fwhm']}")
+                logging.info(f"streak amplitude = {streak_properties['amplitude']}")
+                logging.info(f"streak mean brightness = {streak_properties['mean_brightness']}")
+                logging.info(f"streak width = {streak_properties['sigma']}")
+                logging.info(f"streak fwhm = {streak_properties['fwhm']}")
+    
+    yaml_results = {}
+    for filepath in results:
+        fname = os.path.basename(filepath)
+        yaml_results[fname] = {}
+        for subfile in results[filepath]:
+            yaml_results[fname][subfile] = {}
+            for id, val in results[filepath][subfile].items():
+                yaml_results[fname][subfile][id] = {}
+
+                yaml_results[fname][subfile][id]["amplitude"] = float(val["amplitude"])
+                yaml_results[fname][subfile][id]["mean_brightness"] = float(val["mean_brightness"])
+                yaml_results[fname][subfile][id]["sigma"] = float(val["sigma"])
+                yaml_results[fname][subfile][id]["fwhm"] = float(val["fwhm"]) 
+ 
+    #Write out the overall output
+    if args.output is not None:
+        with open(args.output, 'w') as outfile:
+            yaml.dump(yaml_results, outfile)

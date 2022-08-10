@@ -197,7 +197,7 @@ if __name__ == '__main__':
                 yaml_results[fname][subfile][id]["sigma"] = float(val["sigma"])
                 yaml_results[fname][subfile][id]["fwhm"] = float(val["fwhm"])
 
-    # Write out the overall output
+    # Write out the overall output 
     if args.output is not None:
         with open(args.output, 'w') as outfile:
             yaml.dump(yaml_results, outfile)

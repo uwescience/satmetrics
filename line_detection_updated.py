@@ -18,6 +18,7 @@ Process
 # Importing necessary libraries
 import numpy as np
 import matplotlib.pyplot as plt
+import logging
 
 import cv2
 
@@ -168,7 +169,7 @@ class LineDetection:
         as flux_prop_thresholds
     '''
     # Instatiating constructors
-    def __init__(self, image=None, **kwargs):
+    def __init__(self, image, **kwargs):
         # Assign the raw image
         self.image = image.copy()
         self.configure_from_dict(kwargs)
@@ -309,6 +310,8 @@ class LineDetection:
         lines = np.vstack((dists, angles)).T
         cart_coords_list = []
         angles_list = []
+
+        logging.info(f"Number of detected lines = {len(dists)}")
 
         for i in range(len(angles)):
             (x0, y0) = dists[i] * np.array([np.cos(angles[i]), np.sin(angles[i])])

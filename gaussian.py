@@ -168,13 +168,9 @@ def validate_streak(a, mu, r2, nr2, xmax, xmin, sigma, debug=False):
     """
     streak_zero_location = np.abs(mu - ((xmax - xmin) / 2))
     fwhm = 2.355 * sigma
-    if debug:
-        print(f"Distance from middle: {streak_zero_location:.3}")
-        print(f"Full Width Half Max: {fwhm:.3}")
-        print(f"RMSD: {r2:.3}, NRMSD: {nr2:.3}")
-        logging.debug(f"Distance from middle: {streak_zero_location:.3}")
-        logging.debug(f"Full Width Half Max: {fwhm:.3}")
-        logging.debug(f"RMSD: {r2:.3}, NRMSD: {nr2:.3}")
+    logging.info(f"Distance from middle: {streak_zero_location:.3}")
+    logging.info(f"Full Width Half Max: {fwhm:.3}")
+    logging.info(f"RMSD: {r2:.3}, NRMSD: {nr2:.3}")
     if nr2 <= 2 and streak_zero_location < 10 and fwhm < 20:
         return True
     else:

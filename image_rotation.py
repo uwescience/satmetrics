@@ -21,10 +21,68 @@ Process (in development currently):
        based on the mean coordinates
     7. Rotate the image for each cluster at the determined angle of rotation
 """
+import logging
 
 import numpy as np
 import cv2
 import gaussian as gs
+import matplotlib.pyplot as plt
+import pixelplot
+
+def get_edge_intersections(rho, theta, image_dim, scikit_cart_coord):
+    """Finds Cartesian Coordinates of a line at the edge of image given the radius and angle
+    in Polar Coordinates
+
+    Parameters
+    -----------
+    rho : `float`
+        Radius of detected line in Polar Coordinates
+    theta : `float`
+        Angle of detected line in Polar Coordinates
+
+     Returns
+    ----------
+    p1 : `list`
+        Pair of `(x1, y1)` pixel coordinates where line enters image.
+    p2 : `list`
+        Pair of `(x2, y2)` pixel coordinates where line exits image.
+    """
+
+    x_size = image_dim[1]
+    y_size = image_dim[0]
+
+    # determine where line would be if it were to hit every edge of the image
+    if theta % np.pi == 0:
+        y = scikit_cart_coord[1]
+        one = [0, y]
+        two = [x_size, y]
+        final_coord = one, two
+        return final_coord
+    elif np.cos(theta) == 0:
+        x = scikit_cart_coord[0]
+        one = [x, 0]
+        two = [x, y_size]
+        final_coord = [one, two]
+        return one, two
+    else:
+        one = [0, rho / np.sin(theta)]
+        two = [rho / np.cos(theta), 0]
+        three = [x_size, -1 * (np.cos(theta) / np.sin(theta) * x_size) + (rho / np.sin(theta))]
+        four = [(-1 * (np.sin(theta) / np.cos(theta)) * y_size) + (rho / np.cos(theta)), y_size]
+
+        # isolate the x values and the y values
+        validate = [one, two, three, four]
+        validate = np.array(validate)
+        val_x = validate[:, 0]
+        val_y = validate[:, 1]
+
+        # determine if the x-values or y-values given are in the boundaries of the image
+        bool_x = [0 <= val_x[i] <= x_size for i in range(4)]
+        bool_y = [0 <= val_y[i] <= y_size for i in range(4)]
+        true_bool = [bool_x[i] & bool_y[i] for i in range(4)]
+        final_coord = validate[true_bool]
+        return final_coord
+
 
 
 def get_coord(rho, theta, image, scikit_cart_coord):
@@ -161,8 +219,7 @@ def determine_rotation_angle(coor_1, coor_2):
 
     # converting angle from radians to degrees
     angle = (angle * 180 / np.pi)
-    angle = np.linspace(angle - 0.5, angle + 0.5, num=11)
-
+    #angle = np.linspace(angle - 0.5, angle + 0.5, num=11)
     return angle
 
 
@@ -195,7 +252,7 @@ def norm_rsmd_test(image):
     else:
         return False
 
-    return nr2
+    return nr2, a, mu, width
 
 
 def rotate_image(image, angle, coordinates):
@@ -218,40 +275,111 @@ def rotate_image(image, angle, coordinates):
     rotated_image : `numpy.array`
         Image containing the streak of interest rotated such that it is parallel with
         the x-axis and cropped to reduce noise
-    """
-    if isinstance(angle, float):
-        angle = [angle, ]
-
+    """        
     # finding midpoint of line to find point of rotation
     # because pixels have to be integers, this midpoint will be an estimate
 
     # rotating original image without crop
-    for a in angle:
-        rotation_x = (coordinates[1][0] + coordinates[0][0]) // 2
-        rotation_y = (coordinates[1][1] + coordinates[0][1]) // 2
+    rotation_x = (coordinates[1][0] + coordinates[0][0]) // 2
+    rotation_y = (coordinates[1][1] + coordinates[0][1]) // 2
+    
+    matrix = cv2.getRotationMatrix2D((rotation_x, rotation_y), angle, 1.0)
+    rotated_image = cv2.warpAffine(image, matrix, (image.shape[1], image.shape[0]))
+    #plt.imshow(rotated_image)
+    #plt.savefig(name + ".png")
 
-        matrix = cv2.getRotationMatrix2D((rotation_x, rotation_y), a, 1.0)
-        rotated_image = cv2.warpAffine(image, matrix, (image.shape[1], image.shape[0]))
-        # cropping image
-        distance = np.sqrt((coordinates[1][0] - coordinates[0][0])**2 +
-                        (coordinates[1][1] - coordinates[0][1])**2)
-        if distance < image.shape[1]:
-            rotated_image = rotated_image[int(rotation_y - 50): int(rotation_y + 50), 0: int(distance)]
-        else:
-            rotated_image = rotated_image[int(rotation_y - 50): int(rotation_y + 50)]
+    # cropping image
+    distance = np.sqrt((coordinates[1][0] - coordinates[0][0])**2 +
+                    (coordinates[1][1] - coordinates[0][1])**2)
+    if distance < image.shape[1]:
+        rotated_image = rotated_image[int(rotation_y - 50): int(rotation_y + 50), 0: int(distance)]
+    else:
+        rotated_image = rotated_image[int(rotation_y - 50): int(rotation_y + 50)]
 
     return rotated_image
 
+def transform_rho_theta(clustered_lines, angles, image, cart_coord):
+    dim_x, dim_y = clustered_lines.shape 
+    # R and theta --> become x1, y2, x2, y2
+    clustered_line_coords = np.zeros((dim_x,dim_y+2))
+    for i, line in enumerate(clustered_lines):
+        (x1, y1), (x2, y2) = get_edge_intersections(line[0], line[1], image.shape, cart_coord)
+        clustered_line_coords[i, 0] = x1
+        clustered_line_coords[i, 1] = y1
+        clustered_line_coords[i, 2] = x2
+        clustered_line_coords[i, 3] = y2
+        clustered_line_coords[i, 4] = line[-1]
 
-def calc_clustered_angles(clustered_lines, angles):
+    transform_coords = []
     ncluster = int(max(clustered_lines[:, 2])) + 1
-    angles = np.array(angles)
-    rotation_angles = []
-    for i in range(ncluster):
-        cur_angle = angles[clustered_lines[:, 2] == i]
-        rotation_angles.append(np.mean(cur_angle))
-    return rotation_angles
 
+    for i in range(ncluster):
+        cur_cluster = clustered_line_coords[clustered_line_coords[:, -1] == i][:, 0:-1]
+        x1_mean = np.mean(cur_cluster[:,0])
+        y1_mean = np.mean(cur_cluster[:,1])
+        x2_mean = np.mean(cur_cluster[:,2])
+        y2_mean = np.mean(cur_cluster[:,3])
+
+        transform_coords.append([(x1_mean, y1_mean), (x2_mean, y2_mean)])
+    
+    return transform_coords
+
+
+def complete_rotate_image(clustered_lines, angles, image, cart_coord):
+    """Creates a rotated image for each cluster of lines
+
+    Parameters
+    -----------
+    clustered_lines : `array`
+        Array of lines with each row corresponding to a single houghline,
+        the first column corresponding to rho, the second column corresponding to theta,
+        and the third column corresponding to the cluster
+    angle : `array`
+        Array of angles determined by sckit image for each houghline
+    image : `numpy.array`
+        A 2D array containing the image with the streaks of interest
+
+    Return
+    --------
+    rot_images : `list`
+        List of 2D matrices, each `numpy.array` represents a rotated image of a single cluster
+    """
+
+
+    clustered_line_mean_coords = transform_rho_theta(clustered_lines, angles, image, cart_coord)
+    rotated_images = []
+    best_fit_params = []
+    counter = 0
+    for line_mean_coord in clustered_line_mean_coords:
+        counter += 1
+        mean_angle = determine_rotation_angle(line_mean_coord[0], line_mean_coord[1])
+        rotated_image = rotate_image(image, mean_angle, line_mean_coord)
+        is_streak_okay, a, mu, sigma, fwhm = gs.fit_image(rotated_image)
+        pixelplot.pixelplot(rotated_image)
+        plt.savefig(str(counter) + ".png")
+        logging.info(f"Streak okay? = {is_streak_okay}")
+        
+
+        if is_streak_okay:
+            best_rotated_image = rotated_image
+            angles = np.arange(mean_angle - 0.5, mean_angle + 0.5, 0.1)
+            nrsmd_min = np.inf
+            for alpha in angles:
+                guess = rotate_image(image, angle=alpha, coordinates=line_mean_coord)
+                nrsmd_test, a_t, mu_t, width_t = norm_rsmd_test(rotated_image)
+                if nrsmd_test is not False and nrsmd_test < nrsmd_min:
+                    if not np.isinf(nrsmd_min):
+                        a, mu, sigma, fwhm = a_t, mu_t, width_t, width_t *2.355
+                    nrsmd_min = nrsmd_test
+                    best_rotated_image = rotated_image
+            rotated_images.append(best_rotated_image)
+            best_fit_params.append({'amplitude': a,
+                                    'mean_brightness': mu,
+                                    'sigma': sigma,
+                                    'fwhm': fwhm})
+
+
+    return rotated_images, best_fit_params
 
 
 def rotate_img_clustered(clustered_lines, angles, image, cart_coord):

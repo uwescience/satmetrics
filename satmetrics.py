@@ -11,6 +11,7 @@ import line_detection_updated as ld
 import image_rotation as ir
 import gaussian
 
+
 handler = logging.StreamHandler(stream=sys.stdout)
 logging.basicConfig(
     format='%(asctime)s %(message)s',
@@ -94,7 +95,6 @@ def satmetrics(filepath, config={}):
     valid_streaks = {}
 
     for i in images_indices:
-
         # Performing Hough Transformation
         detector = ld.LineDetection(image=images[i].data)
         if config:
@@ -106,25 +106,15 @@ def satmetrics(filepath, config={}):
         subfile_identifier = filename + '-' + str(i)
 
         # Rotating the image for analysis
-        rotated_images = ir.rotate_img_clustered(clustered_lines=clustered_lines,
+        rotated_images, best_fit_params = ir.complete_rotate_image(clustered_lines=clustered_lines,
                                                  angles=results_ht["Angles"],
                                                  image=images[i].data,
                                                  cart_coord=results_ht['Cartesian Coordinates'])
 
+        num_streaks = len(rotated_images)
         valid_streaks_image = {}
-
-        # Validating streaks and getting metrics
-        streak_counter = 1
-        for j in range(len(rotated_images)):
-            valid, a, mu, sigma, fwhm = gaussian.fit_image(rotated_images[j])
-            image_results = {'amplitude': a,
-                             'mean_brightness': mu,
-                             'sigma': sigma,
-                             'fwhm': fwhm}
-
-            if valid:
-                valid_streaks_image[str(streak_counter)] = image_results
-                streak_counter += 1
+        for j in range(num_streaks):
+            valid_streaks_image[str(j)] = best_fit_params[j]
 
         valid_streaks[subfile_identifier] = valid_streaks_image
 

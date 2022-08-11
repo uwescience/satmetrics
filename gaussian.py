@@ -4,12 +4,16 @@ Author: Ashley Santos
 This module contains fitting and plotting functionalities.
 
 '''
-
-import numpy as np
-import matplotlib.pyplot as plt
-import scipy.optimize as optim
 import logging
 
+import numpy as np
+import scipy.optimize as optim
+import matplotlib.pyplot as plt
+from astropy.stats import SigmaClip
+
+
+def line(x, a=0, b=0):
+    return a*x+b
 
 def gauss(x, a, mu, width):
     """Calculates a gaussian in sample points with the given parameters.
@@ -33,7 +37,7 @@ def gauss(x, a, mu, width):
     return a*np.exp(-(((x-mu)/(2*width))**2))
 
 
-def fit(x, y):
+def fit(x, y, p0=None, model=gauss):
     """Fits a gaussian to the given sample.
 
     Parameters
@@ -52,9 +56,11 @@ def fit(x, y):
     width : `float`
         The standard deviation.
     """
-    (a, mu, width), unc = optim.curve_fit(gauss, x, y, p0=[np.max(y), ((x[-1] - x[0])/2), np.max(x)/4])
+    if p0 is None:
+        p0 = [np.max(y), ((x[-1] - x[0])/2), np.max(x)/4]
+    params, unc = optim.curve_fit(model, x, y, p0=p0)
 
-    return a, mu, width
+    return params
 
 
 def rmsd(x, y, yhat):
@@ -226,20 +232,50 @@ def generate_data(x, a, mu, width, noise_level=10):
     return noisy_y
 
 
+def detrend(x, y, sigma=3, maxiters=10):
+    sigma_clip = SigmaClip(sigma, maxiters)
+    init_guess = [0, 0]
+    a, b = fit(x, sigma_clip(y), p0=init_guess, model=line)
+    return y - line(x, a, b), a, b
+
+
 def fit_image(rotated_image):
     x = np.arange(0, rotated_image.shape[0], 1)
     y = list(np.median(rotated_image, axis=1))
 
+    detrended, la, lb = detrend(x, y)
+
+    init_guess = [np.max(y), ((x[-1] - x[0])/2), np.max(x)/4]
     try:
-        a, mu, sigma = fit(x, y)
+        a, mu, sigma = fit(x, detrended, p0=init_guess, model=gauss)
     except RuntimeError:
         return False, None, None, None, None
 
     yhat = gauss(x, a, mu, sigma)
 
-    r2 = rmsd(x, y, yhat)
-    nr2 = nrmsd(x, y, yhat)
+    r2 = rmsd(x, detrended, yhat)
+    nr2 = nrmsd(x, detrended, yhat)
 
     is_streak_okay = validate_streak(a, mu, r2, nr2, x[-1], x[0], sigma)
+
+    fig, axes = plt.subplots(3, 1, figsize=(20,20), sharex=True)
+    ax1, ax2, ax3 = axes
+
+    ax1.plot(x, y, label="Image Data")
+    ax1.plot(x, line(x, la, lb), label="Trend")
+    ax1.set_title("Raw Brightness Profile")
+    ax1.legend()
+
+    ax2.plot(x, detrended, label="Data - Trend")
+    ax2.legend()
+    ax2.set_title("Detrended brightness profile")
+
+    ax3.plot(x, detrended, label="Detrended signal")
+    ax3.plot(x, yhat, label="Fitted Gaussian")
+    ax3.set_title("Validating signal")
+    ax3.legend()
+    plt.savefig("validation.png")
+    plt.cla()
+    plt.clf()
 
     return is_streak_okay, a, mu, sigma, 2.355 * sigma

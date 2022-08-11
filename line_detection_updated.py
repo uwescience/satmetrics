@@ -21,11 +21,33 @@ import matplotlib.pyplot as plt
 import logging
 
 import cv2
-
+from photutils import Background2D, MedianBackground
+from astropy.stats import SigmaClip
 from skimage.transform import hough_line, hough_line_peaks
 from sklearn.cluster import MeanShift
+import astropy.visualization as aviz
 
 import yaml
+
+
+
+def remove_background(img, sigma=3, maxiters=10, kernel_size=(70, 70), filter_size=(3, 3)):
+    # Get background map and subtract.
+    sigma_clip = SigmaClip(sigma, maxiters)
+    median_bkg_estimator = MedianBackground()
+    bkg = Background2D(img,
+                       kernel_size,
+                       filter_size=filter_size,
+                       sigma_clip=sigma_clip,
+                       bkg_estimator=median_bkg_estimator)
+    background_map = bkg.background
+    fig, ax = plt.subplots(figsize=(20, 20))
+    ax.imshow(background_map)
+    ax.set_title("Estimated Background")
+    plt.savefig("background.png")
+    corrected = img - background_map
+
+    return corrected
 
 
 def image_mask(img, percent):
@@ -219,6 +241,22 @@ class LineDetection:
         --------
         line_detection_updated.LineDetection.hough_transformation : Hough transformation function
         '''
+        stretch = aviz.HistEqStretch(self.image)
+        norm = aviz.ImageNormalize(self.image, stretch=stretch, clip=True)
+        fig, ax = plt.subplots(figsize=(20, 20))
+        ax.imshow(norm(self.image))
+        ax.set_title("Science Image")
+        plt.savefig("before.png")
+        self.image = remove_background(self.image)
+        fig, ax = plt.subplots(figsize=(20, 20))
+        stretch = aviz.HistEqStretch(self.image)
+        norm = aviz.ImageNormalize(self.image, stretch=stretch, clip=True)
+        ax.imshow(norm(self.image))
+        ax.set_title("Background Subtracted")
+        plt.savefig("after.png")
+        plt.cla()
+        plt.clf()
+
         trimmed_image = self.image.copy()
 
         # Making first brightness cuts in the image
@@ -304,7 +342,7 @@ class LineDetection:
         h, theta, d = hough_line(edges, theta=tested_angles)
 
         # Retriving the peaks
-        accum, angles, dists = hough_line_peaks(h, theta, d, threshold=thresh)
+        accum, angles, dists = hough_line_peaks(h, theta, d, threshold=thresh/2)
 
         # Finding the cartesian coordinates and storing the returns
         lines = np.vstack((dists, angles)).T

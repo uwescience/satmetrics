@@ -47,7 +47,6 @@ def get_edge_intersections(rho, theta, image_dim, scikit_cart_coord):
     p2 : `list`
         Pair of `(x2, y2)` pixel coordinates where line exits image.
     """
-
     x_size = image_dim[1]
     y_size = image_dim[0]
 
@@ -56,14 +55,13 @@ def get_edge_intersections(rho, theta, image_dim, scikit_cart_coord):
         y = scikit_cart_coord[1]
         one = [0, y]
         two = [x_size, y]
-        final_coord = one, two
-        return final_coord
+        final_coord = [one, two]
+        breakpoint()
     elif np.cos(theta) == 0:
         x = scikit_cart_coord[0]
         one = [x, 0]
         two = [x, y_size]
         final_coord = [one, two]
-        return one, two
     else:
         one = [0, rho / np.sin(theta)]
         two = [rho / np.cos(theta), 0]
@@ -81,7 +79,8 @@ def get_edge_intersections(rho, theta, image_dim, scikit_cart_coord):
         bool_y = [0 <= val_y[i] <= y_size for i in range(4)]
         true_bool = [bool_x[i] & bool_y[i] for i in range(4)]
         final_coord = validate[true_bool]
-        return final_coord
+
+    return final_coord
 
 
 
@@ -250,7 +249,7 @@ def norm_rsmd_test(image):
         yhat = gs.gauss(x, a, mu, width)
         nr2 = gs.nrmsd(x, y, yhat)
     else:
-        return False
+        return False, a, mu, width
 
     return nr2, a, mu, width
 
@@ -275,35 +274,43 @@ def rotate_image(image, angle, coordinates):
     rotated_image : `numpy.array`
         Image containing the streak of interest rotated such that it is parallel with
         the x-axis and cropped to reduce noise
-    """        
+    """
     # finding midpoint of line to find point of rotation
     # because pixels have to be integers, this midpoint will be an estimate
 
     # rotating original image without crop
     rotation_x = (coordinates[1][0] + coordinates[0][0]) // 2
     rotation_y = (coordinates[1][1] + coordinates[0][1]) // 2
-    
+
     matrix = cv2.getRotationMatrix2D((rotation_x, rotation_y), angle, 1.0)
-    rotated_image = cv2.warpAffine(image, matrix, (image.shape[1], image.shape[0]))
+    rotated_image = cv2.warpAffine(image.astype(float), matrix, (image.shape[1], image.shape[0]))
+
     #plt.imshow(rotated_image)
     #plt.savefig(name + ".png")
 
-    # cropping image
     distance = np.sqrt((coordinates[1][0] - coordinates[0][0])**2 +
                     (coordinates[1][1] - coordinates[0][1])**2)
+
+    # it's fine if end is bigger than the array, but if start
+    # goes negative we are indexing like array[bigger, lower]
+    # and get an empty array
+    start, end = int(rotation_y - 50), int(rotation_y + 50)
+    if start < 0:
+        start = 0
+
     if distance < image.shape[1]:
-        rotated_image = rotated_image[int(rotation_y - 50): int(rotation_y + 50), 0: int(distance)]
+        rotated_image = rotated_image[start: end]
     else:
-        rotated_image = rotated_image[int(rotation_y - 50): int(rotation_y + 50)]
+        rotated_image = rotated_image[start: end]
 
     return rotated_image
 
 def transform_rho_theta(clustered_lines, angles, image, cart_coord):
-    dim_x, dim_y = clustered_lines.shape 
+    dim_x, dim_y = clustered_lines.shape
     # R and theta --> become x1, y2, x2, y2
     clustered_line_coords = np.zeros((dim_x,dim_y+2))
     for i, line in enumerate(clustered_lines):
-        (x1, y1), (x2, y2) = get_edge_intersections(line[0], line[1], image.shape, cart_coord)
+        (x1, y1), (x2, y2) = get_edge_intersections(line[0], line[1], image.shape, cart_coord[i])
         clustered_line_coords[i, 0] = x1
         clustered_line_coords[i, 1] = y1
         clustered_line_coords[i, 2] = x2
@@ -321,7 +328,7 @@ def transform_rho_theta(clustered_lines, angles, image, cart_coord):
         y2_mean = np.mean(cur_cluster[:,3])
 
         transform_coords.append([(x1_mean, y1_mean), (x2_mean, y2_mean)])
-    
+
     return transform_coords
 
 
@@ -353,12 +360,12 @@ def complete_rotate_image(clustered_lines, angles, image, cart_coord):
     for line_mean_coord in clustered_line_mean_coords:
         counter += 1
         mean_angle = determine_rotation_angle(line_mean_coord[0], line_mean_coord[1])
-        rotated_image = rotate_image(image, mean_angle, line_mean_coord)
+        rotated_image = rotate_image(image.astype(float), mean_angle, line_mean_coord)
         is_streak_okay, a, mu, sigma, fwhm = gs.fit_image(rotated_image)
         pixelplot.pixelplot(rotated_image)
-        plt.savefig(str(counter) + ".png")
+        plt.savefig(str(counter) + "_profile.png")
         logging.info(f"Streak okay? = {is_streak_okay}")
-        
+
 
         if is_streak_okay:
             best_rotated_image = rotated_image
@@ -418,7 +425,7 @@ def rotate_img_clustered(clustered_lines, angles, image, cart_coord):
             cur_coord = cart_coord[clustered_lines[:, 2] == i]
             cur_angle = (cur_angle * 180 / np.pi) - 90
             cur_angle = cur_angle[0]
-  
+
             coord = coord_all_lines(polar_coor=cur_cluster, image=image,
                                     sckit_cart_coord=cur_coord)
             rotated_image = rotate_image(image, angle)

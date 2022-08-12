@@ -5,7 +5,9 @@ import traceback
 import sys
 import yaml
 
+import numpy as np
 from astropy.io import fits
+import matplotlib.pyplot as plt
 
 import line_detection_updated as ld
 import image_rotation as ir
@@ -65,6 +67,38 @@ def file_ingest(filepath):
     return {'image_list': images, 'image_indices': images_index, 'filename': filename}
 
 
+def plot_debug(name, results_ht, detector):
+    #Plots of line detection
+    fig, axes = plt.subplots(1, 3, figsize=(30, 15))
+    ax = axes.ravel()
+
+    ld.show(results_ht['Thresholded Image'], cmap="gray", ax=ax[0], interpolation="none")
+    ax[0].set_title('Input image (thresholded)')
+    ax[0].set_axis_off()
+
+    ld.show(results_ht["Edges"], ax=ax[1])
+    ax[1].set_title('Canny edge image')
+    ax[1].set_axis_off()
+
+    #Detected lines
+    blank_image = np.zeros(detector.image.shape)
+
+    ld.show(blank_image, cmap="gray", ax=ax[2])
+
+    ax[2].set_axis_off()
+    ax[2].set_title('Detected lines')
+
+    cart_coords = results_ht['Cartesian Coordinates']
+    angles = results_ht['Angles']
+    for i in range(len(cart_coords)):
+        ax[2].axline(cart_coords[i], slope=np.tan(angles[i] + np.pi/2))
+
+    plt.tight_layout()
+    plt.savefig("debug_" + name + ".png")
+    plt.cla()
+    plt.clf()
+
+
 def satmetrics(filepath, config={}):
     """
     Applies Hough transformation, performs image rotation and then finds properties of
@@ -101,11 +135,17 @@ def satmetrics(filepath, config={}):
             detector.configure_from_file(config)
 
         results_ht = detector.hough_transformation()
+        if len(results_ht["Lines"]) == 0:
+            logging.info(f"No lines found in {filepath} - skipping.")
+            return None, None
         clustered_lines = ld.cluster(results_ht["Cartesian Coordinates"],
                                      results_ht["Lines"])
         subfile_identifier = filename + '-' + str(i)
+        plot_debug(subfile_identifier, results_ht, detector)
 
         # Rotating the image for analysis
+        #if len(results_ht["Cartesian Coordinates"]) == 1:
+        #    results_ht["Cartesian Coordinates"] = results_ht["Cartesian Coordinates"][0]
         rotated_images, best_fit_params = ir.complete_rotate_image(clustered_lines=clustered_lines,
                                                  angles=results_ht["Angles"],
                                                  image=images[i].data,
@@ -153,8 +193,13 @@ if __name__ == '__main__':
         try:
             streak_results, all_images = satmetrics(filepath, args.config)
         except ValueError as e:
+            # if processing failed, skip current file
             logging.error(f"Skipping {filepath} due to: {e} ")
             logging.error(traceback.format_exc())
+            continue
+
+        # if no lines are found skip further processing
+        if streak_results is None:
             continue
 
         results[filepath] = streak_results
@@ -187,7 +232,7 @@ if __name__ == '__main__':
                 yaml_results[fname][subfile][id]["sigma"] = float(val["sigma"])
                 yaml_results[fname][subfile][id]["fwhm"] = float(val["fwhm"])
 
-    # Write out the overall output 
+    # Write out the overall output
     if args.output is not None:
         with open(args.output, 'w') as outfile:
             yaml.dump(yaml_results, outfile)

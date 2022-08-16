@@ -243,10 +243,12 @@ class LineDetection:
         '''
         stretch = aviz.HistEqStretch(self.image)
         norm = aviz.ImageNormalize(self.image, stretch=stretch, clip=True)
+
         fig, ax = plt.subplots(figsize=(20, 20))
         ax.imshow(norm(self.image))
         ax.set_title("Science Image")
         plt.savefig("before.png")
+
         self.image = remove_background(self.image)
         fig, ax = plt.subplots(figsize=(20, 20))
         stretch = aviz.HistEqStretch(self.image)

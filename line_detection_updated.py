@@ -22,11 +22,27 @@ import logging
 
 import cv2
 
+from photutils import Background2D, MedianBackground
+from astropy.stats import SigmaClip
 from skimage.transform import hough_line, hough_line_peaks
 from sklearn.cluster import MeanShift
 
 import yaml
 
+
+def remove_background(img, sigma=3, maxiters=10, kernel_size=(70, 70), filter_size=(3, 3)):
+    # Get background map and subtract.
+    sigma_clip = SigmaClip(sigma, maxiters)
+    median_bkg_estimator = MedianBackground()
+    bkg = Background2D(img,
+                       kernel_size,
+                       filter_size=filter_size,
+                       sigma_clip=sigma_clip,
+                       bkg_estimator=median_bkg_estimator)
+    background_map = bkg.background
+    corrected = img - background_map
+
+    return corrected
 
 def image_mask(img, percent):
     """
@@ -219,6 +235,7 @@ class LineDetection:
         --------
         line_detection_updated.LineDetection.hough_transformation : Hough transformation function
         '''
+        self.image = remove_background(self.image)
         trimmed_image = self.image.copy()
 
         # Making first brightness cuts in the image

@@ -283,18 +283,18 @@ def rotate_image(image, angle, coordinates):
     rotation_x = (coordinates[1][0] + coordinates[0][0]) // 2
     rotation_y = (coordinates[1][1] + coordinates[0][1]) // 2
     
-    matrix = cv2.getRotationMatrix2D((rotation_x, rotation_y), angle, 1.0)
+    matrix = cv2.getRotationMatrix2D(center = (rotation_x, rotation_y), angle = angle, scale = 1.0)
     rotated_image = cv2.warpAffine(image, matrix, (image.shape[1], image.shape[0]))
     #plt.imshow(rotated_image)
     #plt.savefig(name + ".png")
 
     # cropping image
-    distance = np.sqrt((coordinates[1][0] - coordinates[0][0])**2 +
-                    (coordinates[1][1] - coordinates[0][1])**2)
-    if distance < image.shape[1]:
-        rotated_image = rotated_image[int(rotation_y - 50): int(rotation_y + 50), 0: int(distance)]
-    else:
-        rotated_image = rotated_image[int(rotation_y - 50): int(rotation_y + 50)]
+    # distance = np.sqrt((coordinates[1][0] - coordinates[0][0])**2 +
+    #                 (coordinates[1][1] - coordinates[0][1])**2)
+    # if distance < image.shape[1]:
+    #     rotated_image = rotated_image[int(rotation_y - 50): int(rotation_y + 50), 0: int(distance)]
+    # else:
+    #     rotated_image = rotated_image[int(rotation_y - 50): int(rotation_y + 50)]
 
     return rotated_image
 
@@ -421,19 +421,22 @@ def rotate_img_clustered(clustered_lines, angles, image, cart_coord):
   
             coord = coord_all_lines(polar_coor=cur_cluster, image=image,
                                     sckit_cart_coord=cur_coord)
-            rotated_image = rotate_image(image, angle)
+            print(coord)
+            coord = summarized_coordinates(coord)
+            print(coord)
+            rotated_image = rotate_image(image, cur_angle, coord)
 
-            for ang in cur_angle:
-                rotated_image = rotate_image(image, angle=ang, coordinates=coord[0])
-                nrsmd_test = norm_rsmd_test(rotated_image)
-                if nrsmd_test is not False and nrsmd_test < nrsmd_true:
-                    nrsmd_true = nrsmd_test
-                    best_rotated_image = rotated_image
-            if nrsmd_true == np.inf:
-                best_rotated_image = rotate_image(image,
-                                                  angle=cur_angle[5],
-                                                  coordinates=coord[0])
-            rot_images.append(best_rotated_image)
+            # for ang in cur_angle:
+            #     rotated_image = rotate_image(image, angle=ang, coordinates=coord[0])
+            #     nrsmd_test = norm_rsmd_test(rotated_image)
+            #     if nrsmd_test is not False and nrsmd_test < nrsmd_true:
+            #         nrsmd_true = nrsmd_test
+            #         best_rotated_image = rotated_image
+            # if nrsmd_true == np.inf:
+            #     best_rotated_image = rotate_image(image,
+            #                                       angle=cur_angle[5],
+            #                                       coordinates=coord[0])
+            rot_images.append(rotated_image)
 
         else:
             nrsmd_true = np.inf
@@ -441,18 +444,19 @@ def rotate_img_clustered(clustered_lines, angles, image, cart_coord):
             list_coord = coord_all_lines(cur_cluster, image, cur_coord)
             coord = summarized_coordinates(list_coord)
             cur_angle = determine_rotation_angle(coord[0], coord[1])
-
-            for ang in cur_angle:
-                rotated_image = rotate_image(image, angle=ang, coordinates=coord)
-                nrsmd_test = norm_rsmd_test(rotated_image)
-                if nrsmd_test is not False and nrsmd_test < nrsmd_true:
-                    nrsmd_true = nrsmd_test
-                    best_rotated_image = rotated_image
-            if nrsmd_true == np.inf:
-                best_rotated_image = rotate_image(image,
-                                                  angle=cur_angle[5],
-                                                  coordinates=coord)
-            rot_images.append(best_rotated_image)
+            rotated_image = rotate_image(image, angle=cur_angle, coordinates=coord)
+            rot_images.append(rotated_image)
+            # for ang in cur_angle:
+            #     rotated_image = rotate_image(image, angle=ang, coordinates=coord)
+            #     nrsmd_test = norm_rsmd_test(rotated_image)
+            #     if nrsmd_test is not False and nrsmd_test < nrsmd_true:
+            #         nrsmd_true = nrsmd_test
+            #         best_rotated_image = rotated_image
+            # if nrsmd_true == np.inf:
+            #     best_rotated_image = rotate_image(image,
+            #                                       angle=cur_angle[5],
+            #                                       coordinates=coord)
+            # rot_images.append(best_rotated_image)
 
     return rot_images
 

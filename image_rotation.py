@@ -3,23 +3,7 @@ Author: Kilando Chambers
 
 This module contains multiple functions that can be used to rotate
 an image containing a streak or multiple streaks such that the streak is horizontal, or parllel with
-the x-axis. Use the line_detection_testing.ipynb file to import this module and
-apply it on multiple images.
-
-Process (in development currently):
-    1. Choose image
-    2. Process the image:
-        a. Apply z_score_trim once to reduce the outlier pixel values
-        b. Apply z_score_trim on this processed image again
-        c. Standardize and normalize the image using cv2
-        d. Perform Canny edge detection
-        e. Trim the edges of the image (if chosen)
-    3. Perform Hough Transformation on the Canny edge image to get streak coordinates
-    4. Convert streak polar coordinates into cartesian coordinates for each cluster
-    5. Find the mean coordinates at the edges of the image for each cluster of hough lines
-    6. Determine the angle of rotation of each cluster of hough lines for the image
-       based on the mean coordinates
-    7. Rotate the image for each cluster at the determined angle of rotation
+the x-axis.
 """
 import logging
 
@@ -30,17 +14,18 @@ import gaussian as gs
 
 def get_edge_intersections(rho, theta, image_dim, scikit_cart_coord):
     """Finds Cartesian Coordinates of a line at the edge of image given the radius and angle
-    in Polar Coordinates
+    in Polar Coordinates.
 
     Parameters
     -----------
     rho : `float`
-        Radius of detected line in Polar Coordinates
+        Radius of detected line in Polar Coordinates.
     theta : `float`
-        Angle of detected line in Polar Coordinates
+        Angle of detected line in Polar Coordinates.
     image_dim: `tuple`
-        1x2 tuple with the dimensions of the image being analyzed
-    scikit_cart_coord: `
+        1x2 tuple with the dimensions of the image being analyzed.
+    scikit_cart_coord: `tuple`
+        (x,y) cartesian coordinate pair the lies on the hough line being evaluated.
 
      Returns
     ----------
@@ -116,20 +101,24 @@ def determine_rotation_angle(coor_1, coor_2):
 
 
 def norm_rsmd_test(image):
-    """Fits function for any input image
+    """Fits function for any input image.
 
     Parameters
     -----------
     image : `numpy.array`
-        2d array containing a rotated image with an isolated streaak
+        2d array containing a rotated image with an isolated streaak.
 
     Returns
     --------
-    False: `boolean`
-        Returns False if the image does not have a fittable gaussian profile
     nr2 : `float`
         A float that represents the normalized root squared mean deviation for
-        a rotated streak's profile
+        a rotated streak's profile.
+    a : `float`
+        Amplitude of the streak's profile.
+    mu : `float`
+        Location where streak's profile peaks.
+    width : `float`
+        The streak's width.
     """
     x = np.arange(0, image.shape[0], 1)
     y = list(np.median(image, axis=1))
@@ -149,24 +138,24 @@ def norm_rsmd_test(image):
 
 def rotate_image(image, angle, coordinates):
     """Rotates an image containing a streak about that streak's midpoint and determined
-    angle of rotation and crops that image for further analysis
+    angle of rotation and crops that image for further analysis.
 
     Parameters
     -----------
     image : `numpy.array`
-        Image containing the streaks of interest
+        Image containing the streaks of interest.
     angle : `float`
         Angle at which a particular streak is to be rotated such that the streak is parallel with
-        the x-axis of the image
+        the x-axis of the image.
     coordinates : `list`
         A list of length two with the entrance and exit cartesian coordinates
-        of the streak of interest
+        of the streak of interest.
 
     Returns
     --------
     rotated_image : `numpy.array`
         Image containing the streak of interest rotated such that it is parallel with
-        the x-axis and cropped to reduce noise
+        the x-axis and cropped to reduce noise.
     """
     # finding midpoint of line to find point of rotation
     # because pixels have to be integers, this midpoint will be an estimate
@@ -199,21 +188,21 @@ def rotate_image(image, angle, coordinates):
 
 def transform_rho_theta(clustered_lines, image, cart_coord):
     """Transforms the polar coordinates of any cluster to the mean edge cartesian
-    coordinates
+    coordinates.
 
     Parameters
     -----------
     clustered_lines : `numpy.array`
-        Array of hough lines with three columns representing rho, theta, and cluster label
+        Array of hough lines with three columns representing rho, theta, and cluster label.
     image : `numpy.array`
-        Image containing the streaks of interest
+        Image containing the streaks of interest.
     cart_coord : `numpy.array`
-        A list of tuples representing x,y coordinattes of points on the hough lines
+        A list of tuples representing x,y coordinattes of points on the hough lines.
 
     Returns
     --------
     transform_coords : `numpy.array`
-        Array of mean (x1, y1) and mean (x2, y2) coordinates and the cluster label
+        Array of mean (x1, y1) and mean (x2, y2) coordinates and the cluster label.
     """
     dim_x, dim_y = clustered_lines.shape
     # R and theta --> become x1, y2, x2, y2
@@ -242,21 +231,25 @@ def transform_rho_theta(clustered_lines, image, cart_coord):
 
 
 def complete_rotate_image(clustered_lines, angles, image, cart_coord):
-    """Creates a rotated image for each cluster of lines
+    """Creates a rotated image for each cluster of lines if the cluster
+    passes validation checks.
     Parameters
     -----------
     clustered_lines : `array`
         Array of lines with each row corresponding to a single houghline,
         the first column corresponding to rho, the second column corresponding to theta,
-        and the third column corresponding to the cluster
+        and the third column corresponding to the cluster.
     angle : `array`
-        Array of angles determined by sckit image for each houghline
+        Array of angles determined by sckit image for each houghline.
     image : `numpy.array`
-        A 2D array containing the image with the streaks of interest
+        A 2D array containing the image with the streaks of interest.
+
     Return
     --------
-    rot_images : `list`
-        List of 2D matrices, each `numpy.array` represents a rotated image of a single cluster
+    rotated_imaages : `list`
+        List of 2D matrices, each `numpy.array` represents a rotated image of a single cluster.
+    best_fit_params: `dictionary`
+        Best fit parameters that corresponds to each rotated image that passes validation checks.
     """
 
     clustered_line_mean_coords = transform_rho_theta(clustered_lines, image, cart_coord)

@@ -268,7 +268,6 @@ def complete_rotate_image(clustered_lines, angles, image, cart_coord):
             angles = np.arange(mean_angle - 0.5, mean_angle + 0.5, 0.1)
             nrsmd_min = np.inf
             for alpha in angles:
-                guess = rotate_image(image, angle=alpha, coordinates=line_mean_coord)
                 nrsmd_test, a_t, mu_t, width_t = norm_rsmd_test(rotated_image)
                 if nrsmd_test is not False and nrsmd_test < nrsmd_min:
                     if not np.isinf(nrsmd_min):

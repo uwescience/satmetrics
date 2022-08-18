@@ -1,6 +1,4 @@
 '''
-Author: Ashley Santos
-
 This module contains fitting and plotting functionalities.
 
 '''
@@ -13,7 +11,8 @@ from astropy.stats import SigmaClip
 
 
 def line(x, a=0, b=0):
-    """Calculates points on a line given by equation
+    """
+    Calculates points on a line given by equation
     y = a*x+b
 
     Parameters
@@ -34,7 +33,8 @@ def line(x, a=0, b=0):
 
 
 def gauss(x, a, mu, width):
-    """Calculates a gaussian in sample points with the given parameters.
+    """
+    Calculates a gaussian in sample points with the given parameters.
 
     Parameters
     ----------
@@ -56,7 +56,8 @@ def gauss(x, a, mu, width):
 
 
 def fit(x, y, p0=None, model=gauss):
-    """Fits a gaussian to the given sample.
+    """
+    Fits a gaussian to the given sample.
 
     Parameters
     ----------
@@ -82,7 +83,8 @@ def fit(x, y, p0=None, model=gauss):
 
 
 def rmsd(x, y, yhat):
-    """Calculates root-mean-square deviation of the given parameters.
+    """
+    Calculates root-mean-square deviation of the given parameters.
 
     Parameters
     ----------
@@ -102,7 +104,8 @@ def rmsd(x, y, yhat):
 
 
 def nrmsd(x, y, yhat):
-    """Calculates normalized root-mean-square deviation of the given parameters.
+    """
+    Calculates normalized root-mean-square deviation of the given parameters.
 
     RMSD is normalized using the mean.
 
@@ -125,7 +128,8 @@ def nrmsd(x, y, yhat):
 
 
 def plot_profile(x, y, ax=None, debug=False):
-    """Plots the profile of given sample coordinates.
+    """
+    Plots the profile of given sample coordinates.
 
     Parameters
     ----------
@@ -204,7 +208,8 @@ def validate_streak(a, mu, r2, nr2, xmax, xmin, sigma, debug=False):
 
 
 def plot_image_profile(rotated_image, ax=None, debug=False):
-    """Plots the profile of given image array.
+    """
+    Plots the profile of given image array.
 
     Parameters
     ----------
@@ -256,7 +261,8 @@ def generate_data(x, a, mu, width, noise_level=10):
 
 
 def detrend(x, y, sigma=3, maxiters=10):
-    """Detrends given data by removing outliers and fitting a line.
+    """
+    Detrends given data by removing outliers and fitting a line.
 
     Parameters
     ----------
@@ -281,6 +287,15 @@ def detrend(x, y, sigma=3, maxiters=10):
 
 
 def fit_image(rotated_image):
+    """
+    Takes a rotated image, fits the gaussian to it and returns
+    output parameters for images that pass the validation.
+
+    Parameters
+    ----------
+    rotated_image : `numpy.array`
+        Desired image you want to fit.
+    """
     x = np.arange(0, rotated_image.shape[0], 1)
     y = list(np.median(rotated_image, axis=1))
     detrended, la, lb = detrend(x, y)

@@ -44,6 +44,7 @@ def remove_background(img, sigma=3, maxiters=10, kernel_size=(70, 70), filter_si
 
     return corrected
 
+
 def image_mask(img, percent):
     """
     Provides mask coordinates for an image

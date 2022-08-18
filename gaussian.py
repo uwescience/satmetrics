@@ -4,12 +4,34 @@ Author: Ashley Santos
 This module contains fitting and plotting functionalities.
 
 '''
-
-import numpy as np
-import matplotlib.pyplot as plt
-import scipy.optimize as optim
 import logging
 
+import numpy as np
+import scipy.optimize as optim
+import matplotlib.pyplot as plt
+from astropy.stats import SigmaClip
+
+
+def line(x, a=0, b=0):
+    """Calculates points on a line given by equation 
+    y = a*x+b
+
+    Parameters
+    ----------
+    x : `numpy.array`
+        Range of values that gauss is applied on.
+    a : `float`, optional 
+        The slope. Default = 0
+    b : `float`, optional
+        The y-intercept. Default = 0
+
+    Returns
+    -------
+    y : `numpy.array`
+        The y-values of the line. 
+    """
+    return a*x+b
+ 
 
 def gauss(x, a, mu, width):
     """Calculates a gaussian in sample points with the given parameters.
@@ -33,7 +55,7 @@ def gauss(x, a, mu, width):
     return a*np.exp(-(((x-mu)/(2*width))**2))
 
 
-def fit(x, y):
+def fit(x, y, p0=None, model=gauss):
     """Fits a gaussian to the given sample.
 
     Parameters
@@ -42,19 +64,21 @@ def fit(x, y):
         X coordinates of the sample.
     y : `numpy.array`
         Y coordinates of the sample.
+    p0 : `tuple`, optional
+        List of initial parameters.
+    model : `callable`, optional
+        Profile model for fitting, by default gaussian.
 
     Returns
     -------
-    a : `float`
-        The amplitude.
-    mu : `float`
-        The mean.
-    width : `float`
-        The standard deviation.
+    params : `tuple`
+        Fitted parameters.
     """
-    (a, mu, width), unc = optim.curve_fit(gauss, x, y, p0=[np.max(y), ((x[-1] - x[0])/2), np.max(x)/4])
+    if p0 is None:
+        p0 = [np.max(y), ((x[-1] - x[0])/2), np.max(x)/4]
+    params, unc = optim.curve_fit(model, x, y, p0=p0)
 
-    return a, mu, width
+    return params
 
 
 def rmsd(x, y, yhat):
@@ -226,19 +250,46 @@ def generate_data(x, a, mu, width, noise_level=10):
     return noisy_y
 
 
+def detrend(x, y, sigma=3, maxiters=10):
+    """Detrends given data by removing outliers and fitting a line.
+
+    Parameters
+    ----------
+    x : `np.array`
+        Points in which data is sampled.
+    y : `np.array`
+        Value of data at sample point.
+    sigma : `float`, optional
+        Standard deviation value passed to the sigma clip, 3 by default.
+    maxiters : `int`, optional
+        Number of maximally allowed sigma clip iterations, 10 by default.
+    
+    Returns
+    --------
+    y : `np.array`
+        Detrended value of the data at sampled points.
+    """
+    sigma_clip = SigmaClip(sigma, maxiters)
+    init_guess = [0, 0]
+    a, b = fit(x, sigma_clip(y), p0=init_guess, model=line)
+    return y - line(x, a, b), a, b
+
+
 def fit_image(rotated_image):
     x = np.arange(0, rotated_image.shape[0], 1)
     y = list(np.median(rotated_image, axis=1))
+    detrended, la, lb = detrend(x, y)
 
+    init_guess = [np.max(y), ((x[-1] - x[0])/2), np.max(x)/4]
     try:
-        a, mu, sigma = fit(x, y)
+        a, mu, sigma = fit(x, detrended, p0=init_guess, model=gauss)
     except RuntimeError:
         return False, None, None, None, None
 
     yhat = gauss(x, a, mu, sigma)
 
-    r2 = rmsd(x, y, yhat)
-    nr2 = nrmsd(x, y, yhat)
+    r2 = rmsd(x, detrended, yhat)
+    nr2 = nrmsd(x, detrended, yhat)
 
     is_streak_okay = validate_streak(a, mu, r2, nr2, x[-1], x[0], sigma)
 

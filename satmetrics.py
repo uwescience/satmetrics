@@ -5,6 +5,7 @@ import traceback
 import sys
 import yaml
 
+import numpy as np
 from astropy.io import fits
 
 import line_detection_updated as ld
@@ -101,6 +102,9 @@ def satmetrics(filepath, config={}):
             detector.configure_from_file(config)
 
         results_ht = detector.hough_transformation()
+        if len(results_ht["Lines"]) == 0:
+            logging.info(f"No lines found in {filepath} - skipping.")
+            return None, None
         clustered_lines = ld.cluster(results_ht["Cartesian Coordinates"],
                                      results_ht["Lines"])
         subfile_identifier = filename + '-' + str(i)
@@ -156,6 +160,10 @@ if __name__ == '__main__':
             logging.error(f"Skipping {filepath} due to: {e} ")
             logging.error(traceback.format_exc())
             continue
+
+        # if no lines are found skip further processing
+        if streak_results is None:
+            continue        
 
         results[filepath] = streak_results
         logging.info(f"Main file = {filepath}")

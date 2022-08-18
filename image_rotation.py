@@ -26,8 +26,7 @@ import logging
 import numpy as np
 import cv2
 import gaussian as gs
-import matplotlib.pyplot as plt
-import pixelplot
+
 
 def get_edge_intersections(rho, theta, image_dim, scikit_cart_coord):
     """Finds Cartesian Coordinates of a line at the edge of image given the radius and angle
@@ -112,7 +111,7 @@ def determine_rotation_angle(coor_1, coor_2):
 
     # converting angle from radians to degrees
     angle = (angle * 180 / np.pi)
-    #angle = np.linspace(angle - 0.5, angle + 0.5, num=11)
+    # angle = np.linspace(angle - 0.5, angle + 0.5, num=11)
     return angle
 
 
@@ -168,21 +167,21 @@ def rotate_image(image, angle, coordinates):
     rotated_image : `numpy.array`
         Image containing the streak of interest rotated such that it is parallel with
         the x-axis and cropped to reduce noise
-    """        
+    """
     # finding midpoint of line to find point of rotation
     # because pixels have to be integers, this midpoint will be an estimate
 
     # rotating original image without crop
     rotation_x = (coordinates[1][0] + coordinates[0][0]) // 2
     rotation_y = (coordinates[1][1] + coordinates[0][1]) // 2
-    
+
     matrix = cv2.getRotationMatrix2D((rotation_x, rotation_y), angle, 1.0)
     rotated_image = cv2.warpAffine(image.astype(float), matrix, (image.shape[1], image.shape[0]))
 
     # cropping image
     distance = np.sqrt((coordinates[1][0] - coordinates[0][0])**2 +
-                    (coordinates[1][1] - coordinates[0][1])**2)
-     
+                       (coordinates[1][1] - coordinates[0][1])**2)
+
     # it's fine if end is bigger than the array, but if start
     # goes negative we are indexing like array[bigger, lower]
     # and get an empty array
@@ -197,6 +196,7 @@ def rotate_image(image, angle, coordinates):
 
     return rotated_image
 
+
 def transform_rho_theta(clustered_lines, image, cart_coord):
     """Transforms the polar coordinates of any cluster to the mean edge cartesian
     coordinates
@@ -204,20 +204,20 @@ def transform_rho_theta(clustered_lines, image, cart_coord):
     Parameters
     -----------
     clustered_lines : `numpy.array`
-        Array of hough lines with three columns representing rho, theta, and cluster label 
+        Array of hough lines with three columns representing rho, theta, and cluster label
     image : `numpy.array`
         Image containing the streaks of interest
     cart_coord : `numpy.array`
-        A list of tuples representing x,y coordinattes of points on the hough lines 
+        A list of tuples representing x,y coordinattes of points on the hough lines
 
     Returns
     --------
     transform_coords : `numpy.array`
         Array of mean (x1, y1) and mean (x2, y2) coordinates and the cluster label
-    """   
-    dim_x, dim_y = clustered_lines.shape 
+    """
+    dim_x, dim_y = clustered_lines.shape
     # R and theta --> become x1, y2, x2, y2
-    clustered_line_coords = np.zeros((dim_x,dim_y+2))
+    clustered_line_coords = np.zeros((dim_x, dim_y+2))
     for i, line in enumerate(clustered_lines):
         (x1, y1), (x2, y2) = get_edge_intersections(line[0], line[1], image.shape, cart_coord[i])
         clustered_line_coords[i, 0] = x1
@@ -231,13 +231,13 @@ def transform_rho_theta(clustered_lines, image, cart_coord):
 
     for i in range(ncluster):
         cur_cluster = clustered_line_coords[clustered_line_coords[:, -1] == i][:, 0:-1]
-        x1_mean = np.mean(cur_cluster[:,0])
-        y1_mean = np.mean(cur_cluster[:,1])
-        x2_mean = np.mean(cur_cluster[:,2])
-        y2_mean = np.mean(cur_cluster[:,3])
+        x1_mean = np.mean(cur_cluster[:, 0])
+        y1_mean = np.mean(cur_cluster[:, 1])
+        x2_mean = np.mean(cur_cluster[:, 2])
+        y2_mean = np.mean(cur_cluster[:, 3])
 
         transform_coords.append([(x1_mean, y1_mean), (x2_mean, y2_mean)])
-    
+
     return transform_coords
 
 
@@ -269,7 +269,7 @@ def complete_rotate_image(clustered_lines, angles, image, cart_coord):
         rotated_image = rotate_image(image.astype(float), mean_angle, line_mean_coord)
         is_streak_okay, a, mu, sigma, fwhm = gs.fit_image(rotated_image)
         logging.info(f"Streak okay? = {is_streak_okay}")
-        
+
         if is_streak_okay:
             best_rotated_image = rotated_image
             angles = np.arange(mean_angle - 0.5, mean_angle + 0.5, 0.1)
@@ -279,7 +279,7 @@ def complete_rotate_image(clustered_lines, angles, image, cart_coord):
                 nrsmd_test, a_t, mu_t, width_t = norm_rsmd_test(rotated_image)
                 if nrsmd_test is not False and nrsmd_test < nrsmd_min:
                     if not np.isinf(nrsmd_min):
-                        a, mu, sigma, fwhm = a_t, mu_t, width_t, width_t *2.355
+                        a, mu, sigma, fwhm = a_t, mu_t, width_t, width_t * 2.355
                     nrsmd_min = nrsmd_test
                     best_rotated_image = rotated_image
             rotated_images.append(best_rotated_image)
@@ -289,4 +289,3 @@ def complete_rotate_image(clustered_lines, angles, image, cart_coord):
                                     'fwhm': fwhm})
 
     return rotated_images, best_fit_params
-

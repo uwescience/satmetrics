@@ -5,12 +5,10 @@ import traceback
 import sys
 import yaml
 
-import numpy as np
 from astropy.io import fits
 
 import line_detection_updated as ld
 import image_rotation as ir
-import gaussian
 
 
 handler = logging.StreamHandler(stream=sys.stdout)
@@ -110,10 +108,11 @@ def satmetrics(filepath, config={}):
         subfile_identifier = filename + '-' + str(i)
 
         # Rotating the image for analysis
-        rotated_images, best_fit_params = ir.complete_rotate_image(clustered_lines=clustered_lines,
-                                                 angles=results_ht["Angles"],
-                                                 image=images[i].data,
-                                                 cart_coord=results_ht['Cartesian Coordinates'])
+        rotated_images, best_fit_params = ir.complete_rotate_image(
+                                                clustered_lines=clustered_lines,
+                                                angles=results_ht["Angles"],
+                                                image=images[i].data,
+                                                cart_coord=results_ht['Cartesian Coordinates'])
 
         num_streaks = len(rotated_images)
         valid_streaks_image = {}
@@ -163,7 +162,7 @@ if __name__ == '__main__':
 
         # if no lines are found skip further processing
         if streak_results is None:
-            continue        
+            continue
 
         results[filepath] = streak_results
         logging.info(f"Main file = {filepath}")
@@ -195,7 +194,7 @@ if __name__ == '__main__':
                 yaml_results[fname][subfile][id]["sigma"] = float(val["sigma"])
                 yaml_results[fname][subfile][id]["fwhm"] = float(val["fwhm"])
 
-    # Write out the overall output 
+    # Write out the overall output
     if args.output is not None:
         with open(args.output, 'w') as outfile:
             yaml.dump(yaml_results, outfile)

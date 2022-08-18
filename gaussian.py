@@ -13,14 +13,14 @@ from astropy.stats import SigmaClip
 
 
 def line(x, a=0, b=0):
-    """Calculates points on a line given by equation 
+    """Calculates points on a line given by equation
     y = a*x+b
 
     Parameters
     ----------
     x : `numpy.array`
         Range of values that gauss is applied on.
-    a : `float`, optional 
+    a : `float`, optional
         The slope. Default = 0
     b : `float`, optional
         The y-intercept. Default = 0
@@ -28,10 +28,10 @@ def line(x, a=0, b=0):
     Returns
     -------
     y : `numpy.array`
-        The y-values of the line. 
+        The y-values of the line.
     """
     return a*x+b
- 
+
 
 def gauss(x, a, mu, width):
     """Calculates a gaussian in sample points with the given parameters.
@@ -166,7 +166,9 @@ def plot_profile(x, y, ax=None, debug=False):
 
 
 def validate_streak(a, mu, r2, nr2, xmax, xmin, sigma, debug=False):
-    """Validates whether the plot profile contains a streak we can successfully fit with a gaussian or not.
+    """
+    Validates whether the plot profile contains a streak we can
+    successfully fit with a gaussian or not.
 
     Parameters
     ----------
@@ -223,7 +225,9 @@ def plot_image_profile(rotated_image, ax=None, debug=False):
 
 
 def generate_data(x, a, mu, width, noise_level=10):
-    """Given sample coordinates with generate data with random noise, which can be adjusted with the parameters.
+    """
+    Given sample coordinates with generate data with random noise,
+    which can be adjusted with the parameters.
 
     Parameters
     ----------
@@ -237,7 +241,8 @@ def generate_data(x, a, mu, width, noise_level=10):
         The standard deviation.
     noise_level : `float`, optional
         Factor to divide noise by.
-        For example, if you set this parameter to a large value, the gaussian will have less noise added.
+        For example, if you set this parameter to a large value,
+        the gaussian will have less noise added.
 
     Returns
     -------
@@ -263,7 +268,7 @@ def detrend(x, y, sigma=3, maxiters=10):
         Standard deviation value passed to the sigma clip, 3 by default.
     maxiters : `int`, optional
         Number of maximally allowed sigma clip iterations, 10 by default.
-    
+
     Returns
     --------
     y : `np.array`

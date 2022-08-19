@@ -18,11 +18,32 @@ Process
 # Importing necessary libraries
 import numpy as np
 import matplotlib.pyplot as plt
+import logging
 
 import cv2
 
+from photutils import Background2D, MedianBackground
+from astropy.stats import SigmaClip
 from skimage.transform import hough_line, hough_line_peaks
 from sklearn.cluster import MeanShift
+
+import yaml
+
+
+def remove_background(img, sigma=3, maxiters=10, kernel_size=(70, 70), filter_size=(3, 3)):
+    # Get background map and subtract.
+    sigma_clip = SigmaClip(sigma, maxiters)
+    median_bkg_estimator = MedianBackground()
+    bkg = Background2D(img,
+                       kernel_size,
+                       filter_size=filter_size,
+                       sigma_clip=sigma_clip,
+                       bkg_estimator=median_bkg_estimator)
+    background_map = bkg.background
+    corrected = img - background_map
+
+    return corrected
+
 
 def image_mask(img, percent):
     """
@@ -38,7 +59,7 @@ def image_mask(img, percent):
 
     Returns
     --------
-    x_dim_left : `int` 
+    x_dim_left : `int`
         Left x coordinate of masking rectangle
     x_dim_right : `int`
         Right x coordinate of masking rectangle
@@ -81,7 +102,7 @@ def show(img, ax=None, show=True, title=None, **kwargs):
     return ax
 
 
-def cluster(cart_coords, lines, bandwidth=50):
+def cluster(cart_coords, lines, bandwidth=50, plot_image=False):
     """
     Uses sklean's MeanShift to cluster the endpoint coordinates of detected lines
 
@@ -94,13 +115,15 @@ def cluster(cart_coords, lines, bandwidth=50):
         Polar coordinates of the detected lines
     bandwidth : `int`, optional, default=50
         Provides the bandwidth parameter for MeanShift algorithm
+    plot_image : `bool`, optional, default=False
+        Plots the assigned clusters
 
     Returns
     --------
     clustered_lines : `numpy.ndarray`
         An array where each row has the polar coordinates of an estimated line
         and the cluster label for that line
-    
+
     See Also
     --------
     sklearn.cluster.MeanShift : MeanShift clustering algorithm
@@ -113,16 +136,17 @@ def cluster(cart_coords, lines, bandwidth=50):
     labels = clustering.labels_.reshape((len(clustering.labels_), 1))
     clustered_lines = np.hstack((lines, labels))
 
-    # Plot the clusters
-    for lab in set(clustering.labels_):
-        mask = clustering.labels_ == lab
-        x = cart_coords_array[:, 0]
-        y = cart_coords_array[:, 1]
+    if plot_image:
+        # Plot the clusters
+        for lab in set(clustering.labels_):
+            mask = clustering.labels_ == lab
+            x = cart_coords_array[:, 0]
+            y = cart_coords_array[:, 1]
 
-        plt.scatter(x[mask], y[mask], label=lab)
-        plt.xlabel("x coordinate")
-        plt.ylabel("y coordinate")
-        plt.legend()
+            plt.scatter(x[mask], y[mask], label=lab)
+            plt.xlabel("x coordinate")
+            plt.ylabel("y coordinate")
+            plt.legend()
 
     return clustered_lines
 
@@ -133,7 +157,7 @@ class LineDetection:
     Applies noise reduction image processing to the raw image, finds edges using Canny and
     detects straight lines using Scikit Image hough_line and hough_line_peaks
 
-    Attributes
+    Parameters
     ----------
     image : `numpy.ndarray`
         The raw image
@@ -144,7 +168,7 @@ class LineDetection:
     brightness_cuts : `tuple`, default=(2,2)
         Limits of pixel brightness values, `(lower, upper)`, that will be cut.
         Pixels with brightness value smaller than `mean - lower * std`
-        are set to 0, and pixel values larger than 
+        are set to 0, and pixel values larger than
         `mean + upper * std` are set to `mean + upper * std`
     thresholding_cut : `float`, default=0.5
         Applied on the processed image. The pixel intensity at these many standard
@@ -162,22 +186,29 @@ class LineDetection:
         as flux_prop_thresholds
     '''
     # Instatiating constructors
-    def __init__(self):
+    def __init__(self, image, **kwargs):
         # Assign the raw image
-        self.image = None
+        self.image = image.copy()
+        self.configure_from_dict(kwargs)
 
+    def configure_from_dict(self, config):
         # Image processing parameters
-        self.mask = False
-        self.mask_percent = 0.2
-        self.brightness_cuts = (2,2)
-        self.thresholding_cut = 0.5
+        self.mask = config.pop("mask", False)
+        self.mask_percent = config.pop("mask_percent", 0.2)
+        self.brightness_cuts = config.pop("brightness_cuts", (2, 2))
+        self.thresholding_cut = config.pop("thresholding_cut", 0.5)
 
         # Line detection parameters
-        self.threshold = 0.075
+        self.threshold = config.pop("threshold", 0.075)
 
         # Blurring parameters
-        self.flux_prop_thresholds = [0.1, 0.2, 0.3, 1]
-        self.blur_kernel_sizes = [3, 5, 9, 11]
+        self.flux_prop_thresholds = config.pop("flux_prop_thresholds", [0.1, 0.2, 0.3, 1])
+        self.blur_kernel_sizes = config.pop("blur_kernel_sizes", [3, 5, 9, 11])
+
+    def configure_from_file(self, filepath):
+        with open(filepath, 'r') as f:
+            config = yaml.safe_load(f)
+        self.configure_from_dict(config)
 
     def process_image(self):
         '''
@@ -200,12 +231,13 @@ class LineDetection:
         edges : `numpy.ndarray`
             The Canny edge detected image on which hough_lines would
             be applied
-        
+
         See Also
         --------
-        line_detection_updated.LineDetection.hough_transformation : Hough Line transformation function
+        line_detection_updated.LineDetection.hough_transformation : Hough transformation function
         '''
-        trimmed_image = self.image
+        self.image = remove_background(self.image)
+        trimmed_image = self.image.copy()
 
         # Making first brightness cuts in the image
         # Outliers on the positive side take the value of the cut.
@@ -270,7 +302,7 @@ class LineDetection:
             The blurred image from process_image returns
         edges : `numpy.ndarray`
             The Canny edge detected image from process_image returns
-        
+
         See Also
         --------
         skimage.transform.hough_line : Scikit Image Hough Line function
@@ -291,17 +323,24 @@ class LineDetection:
 
         # Retriving the peaks
         accum, angles, dists = hough_line_peaks(h, theta, d, threshold=thresh)
-        print(f"Found {len(dists)} lines.")
 
         # Finding the cartesian coordinates and storing the returns
         lines = np.vstack((dists, angles)).T
         cart_coords_list = []
         angles_list = []
 
+        logging.info(f"Number of detected lines = {len(dists)}")
+
         for i in range(len(angles)):
             (x0, y0) = dists[i] * np.array([np.cos(angles[i]), np.sin(angles[i])])
             cart_coords_list.append((x0, y0))
             angles_list.append(angles[i])
 
-        return lines, angles_list, cart_coords_list, thresholded_image, \
-            blurred_image, edges
+        detection_dict = {"Lines": lines,
+                          "Angles": angles_list,
+                          "Cartesian Coordinates": cart_coords_list,
+                          "Thresholded Image": thresholded_image,
+                          "Blurred Image": blurred_image,
+                          "Edges": edges}
+
+        return detection_dict

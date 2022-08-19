@@ -1,10 +1,18 @@
-satmetrics
+Project Summary
 ==========
 
-Satmetrics is an open source library that can be used to detect and quantify satellite streaks in astronomical images. 
-This library has been created within the Satellite Streaks project at University of Washington, Data Science for Social Good fellowship.
+Artificial satellites in Low-Earth orbit (LEO) reflect the sun’s light and leave bright streaks in astronomical images taken by ground-based telescopes. There has been an exponential growth in the number of such satellites in the past few years, a phenomenon which is expected to continue into the foreseeable future. While these satellites are primarily aimed at providing satellite based internet access, they also disrupt night sky based cultural practices, may harm migratory patterns of wildlife, and are causing a rapid increase of bright streaks in astronomical images, which negatively impacts astronomical research. 
 
+The quantification and analysis of satellite streaks in astronomical images is crucial to understand the problem better, draw more attention towards it, and motivate policy actions. However, current efforts in this regard is largely limited to manual analyses of specific images by a few researchers. Our project aims to generalize this process by facilitating large scale analysis of diverse astronomical images containing streaks from telescopes around the world. 
 
-This is a work in progress. 
+Our project uses images collected by the Trailblazer project, an open data repository containing images affected by streaks. We have created a python library called Satmetrics that can ingest a wide variety of images in FITS format, detect streaks in them, and return various properties of those streaks such as mean pixel intensity and width. Satmetrics is a starting point for generating information about satellite streaks that will help astronomers study the problem better, aid satellite operators in adopting better brightness mitigation strategies, and provide a firm evidence base for future policy actions. 
 
+Process Summary
+===============
+
+Satmetrics, at a high level, performs three steps to detect and quantify satellite streaks. The first step is to detect straight lines in an image, which are likely to represent possible streaks. To accomplish this, we apply the Hough Transformation method, a widely used algorithm to detect straight lines in computer vision. The astronomical images sourced from multiple telescopes are quite heterogeneous in terms of the noise present in them. Consistently removing this noise across a variety of images in a generalizable way is the key challenge at this step. We therefore apply several standard image processing techniques such as background reduction, outlier removal, blurring, and edge detection to prepare the image for Hough transformation. This stage outputs one or more estimated straight lines, clustered into groups. Each cluster represents either a single streak or a noise detection.
+
+The next step is validation to distinguish actual streaks from noise. At this step, the tool measures the median pixel intensity values of the average line in each cluster returned from the first stage. We expect the streaks’ median pixel intensity to be approximately Gaussian, and proceed to fit a Gaussian function to differentiate noise from actual streaks. This requires isolating and rotating the parts of the image that contain candidate streaks. 
+
+Once validated, the final step is to measure the properties of the streaks. Currently, Satmetrics provides basic information about the streak such as the amplitude of the pixel intensity representing the height of the streak, its brightness scaled to the pixel level in the image, and the width of the trail. The brightness measurement that Satmetrics outputs is not a calibrated photometric magnitude but is a foundation to begin the kind of brightness analysis work astronomers would want and are capable of doing from the package. 
 

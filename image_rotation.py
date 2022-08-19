@@ -1,176 +1,283 @@
-'''
+"""
 Author: Kilando Chambers
 
-This module contains the image rotation class that can be used to rotate the
-an image containing a streak such that the streak is horizontal, or parllel with
-the x-axis.  Use the line_detection_testing.ipynb file to import this module and 
-apply it on multiple images.
+This module contains multiple functions that can be used to rotate
+an image containing a streak or multiple streaks such that the streak is horizontal, or parllel with
+the x-axis.
+"""
+import logging
 
-Process (in development currently):
-    1. Declare init variables (see description of parameters within the class)
-    2. Choose image
-    3. Process the image:
-        a. Apply z_score_trim once to reduce the outlier pixel values
-        b. Apply z_score_trim on this processed image again
-        c. Standardize and normalize the image using cv2
-        d. Perform Canny edge detection
-        e. Trim the edges of the image (if chosen)
-    4. Perform Hough Transformation on the Canny edge image to get streak coordinates
-    5. Convert streak polar coordinates into cartesian coordinates
-    6. Find the mean coordinates at the edges of the image
-    7. Determine the angle of rotation for the image based on the mean coordinates
-    8. Rotate the image at the determined angle of rotation
-
-Next steps from here:
-    Plot a histogram of the brightness of the image
-'''
-
-#Importing necessary libraries
-from tkinter import N
 import numpy as np
-import matplotlib.pyplot as plt
 import cv2
-import line_detection
-#import imutils
+import gaussian as gs
 
-#Create class with inheritance
-class ImageRotation:
-    def __init__(self):
-        #considering if self.image and self.polar_coor should be required initialized variables
-        self.image = None
-        self.angle = None
-        self.coordinates = None
-        self.polar_coor = None
-        self.rotated_image = None
-        self.mean = None
 
-    def get_coord(self, rho, theta):
-        '''Finds Cartesian Coordinates of a line at the edge of image given the radius and angle
-        in Polar Coordinates
-        
-        Parameters
-        __________
-        rho : 'float'
-        Radius of detected line in Polar Coordinates
-        
-        theta : 'float'
-        Angle of detected line in Polar Coordinates
-        '''
+def get_edge_intersections(rho, theta, image_dim, scikit_cart_coord):
+    """Finds Cartesian Coordinates of a line at the edge of image given the radius and angle
+    in Polar Coordinates.
 
-        x_size = self.image.shape[1]
-        y_size = self.image.shape[0]
+    Parameters
+    -----------
+    rho : `float`
+        Radius of detected line in Polar Coordinates.
+    theta : `float`
+        Angle of detected line in Polar Coordinates.
+    image_dim: `tuple`
+        1x2 tuple with the dimensions of the image being analyzed.
+    scikit_cart_coord: `tuple`
+        (x,y) cartesian coordinate pair the lies on the hough line being evaluated.
 
-        #first guess coordinates if they are within the boundaries of the image
-        x1, y1 = (0, rho / np.sin(theta))
-        x2, y2 = (rho / np.cos(theta), 0)
+     Returns
+    ----------
+    p1 : `list`
+        Pair of `(x1, y1)` pixel coordinates where line enters image.
+    p2 : `list`
+        Pair of `(x2, y2)` pixel coordinates where line exits image.
+    """
 
-        slope = y1 / x2
+    x_size = image_dim[1]
+    y_size = image_dim[0]
 
-        #adjust coordinates to certainly fit within the boundaries of the image
-        if x2 > x_size:
-            x2 = x_size
-            y2 = (-1 * (np.cos(theta) / np.sin(theta)) * x2) + (rho / np.sin(theta))
-            #formula can be found on opencv2 Hough Transform tutorial
-        
-        if y1 > y_size:
-            y1 = y_size
-            x1 = (-1 * (np.sin(theta) / np.cos(theta)) * y1) + (rho / np.cos(theta))
-        
-        return [x1, y1], [x2, y2]
+    # determine where line would be if it were to hit every edge of the image
+    if theta % np.pi == 0:
+        y = scikit_cart_coord[1]
+        one = [0, y]
+        two = [x_size, y]
+        final_coord = [one, two]
+    elif np.cos(theta) == 0:
+        x = scikit_cart_coord[0]
+        one = [x, 0]
+        two = [x, y_size]
+        final_coord = [one, two]
+    else:
+        one = [0, rho / np.sin(theta)]
+        two = [rho / np.cos(theta), 0]
+        three = [x_size, -1 * (np.cos(theta) / np.sin(theta) * x_size) + (rho / np.sin(theta))]
+        four = [(-1 * (np.sin(theta) / np.cos(theta)) * y_size) + (rho / np.cos(theta)), y_size]
 
-    def coord_all_lines(self, polar_coor):
-        #takes list of (rho, theta) coordinates and returns a list of converted cartesian coordinates
-        self.coordinates = [self.get_coord(line[0][0],line[0][1]) for line in polar_coor]
-        lines_coords = self.coordinates
-        return lines_coords
+        # isolate the x values and the y values
+        validate = [one, two, three, four]
+        validate = np.array(validate)
+        val_x = validate[:, 0]
+        val_y = validate[:, 1]
 
-    def mean_coordinates(self, coordinates):
-        '''Finds mean edge cartesian coordinates of all Hough Transform lines
-        
-        Parameters
-        __________
-        coordinates : 'list'
-        List of two pair of cartesian coordinates for each line, where one pair is where
-        the streak enters the image and the other is where the streak exits the image 
-        '''
-        #separating entrance coordinates and exit coordinates
-        first_set = [points[0] for points in coordinates]
-        second_set = [points[1] for points in coordinates]
+        # determine if the x-values or y-values given are in the boundaries of the image
+        bool_x = [0 <= val_x[i] <= x_size for i in range(4)]
+        bool_y = [0 <= val_y[i] <= y_size for i in range(4)]
+        true_bool = [bool_x[i] & bool_y[i] for i in range(4)]
+        final_coord = validate[true_bool]
+    return final_coord
 
-        #separating entrance and exit coordinates by x and y values
-        x1_list = [subcoor[0] for subcoor in first_set]
-        y1_list = [subcoor[1] for subcoor in first_set]
-        x2_list = [subcoor[0] for subcoor in second_set]
-        y2_list = [subcoor[1] for subcoor in second_set]
 
-        #finding mean of all x and y values for entrance and exit coordinates
-        refigured_coor = [x1_list, y1_list, x2_list, y2_list]
-        mean_coor = [np.mean(subcoordinates) for subcoordinates in refigured_coor]
+def determine_rotation_angle(coor_1, coor_2):
+    """Finds angle at which to rotate the image
 
-        x1, y1 = mean_coor[0], mean_coor[1]
-        x2, y2 = mean_coor[2], mean_coor[3]
-        self.mean = ([x1, y1], [x2, y2])
-
-        return [x1, y1], [x2, y2]
-
-    def image_angle(self, coor_1, coor_2):
-        '''Finds angle at which to rotate the image
-        
-        Parameters
-        __________
-        coor_set1 : 'tuple'
+    Parameters
+    -----------
+    coor_set1 : `tuple`
         Any set of cartesian coordinates that lie on the line at which the image is to be rotated
-        
-        coor_set2 : 'tuple'
-        Any set of cartesian coordinatets unequal to the first set of coordinates that lie on the line at
-        which the image is to be rotated
-        '''
+    coor_set2 : `tuple'
+        Any set of cartesian coordinatets unequal to the first set of coordinates that lie on
+        the line at which the image is to be rotated
 
-        #trigonometry
-        if coor_1[0] - coor_2[0] == 0:
-            angle = np.pi / 2
+    Returns
+    --------
+    angle : `float`
+        Angle, in degrees, at which the image should be rotated so the streak of
+        interest will be parallel with the x-axis
+    """
 
-        else: 
-            slope = (coor_1[1] - coor_2[1]) / (coor_1[0] - coor_2[0])
-            angle = np.arctan(slope)
-        
-        #converting angle from radians to degrees
-        self.angle = angle * 180 / np.pi
-        angle_deg = self.angle
-        
-        return angle_deg
+    # trigonometry
+    if coor_1[0] - coor_2[0] == 0:
+        angle = np.pi / 2
+    else:
+        slope = (coor_1[1] - coor_2[1]) / (coor_1[0] - coor_2[0])
+        angle = np.arctan(slope)
 
-    def rotate_image(self, image, angle=None):
-        if angle is None:
-             self.angle = self.image_angle(self.mean[0], self.mean[1]) 
-        else:
-            self.angle = angle
-        print(angle)
-        #finding midpoint of line to find point of rotation
-        #because pixels have to be integers, this midpoint will be an estimate
-        rotation_x = (self.mean[1][0] + self.mean[0][0]) // 2
-        rotation_y = (self.mean[1][1] + self.mean[0][1]) // 2
-        print(rotation_x, rotation_y)
-
-        #rotating original image without crop
-        matrix = cv2.getRotationMatrix2D((rotation_x, rotation_y), self.angle, 1.0)
-        self.rotated_image = cv2.warpAffine(image, matrix, (self.image.shape[1], self.image.shape[0]))
-
-        #cropping image
-        new_height = self.image.shape[0] // 10
-
-        #detecting edge cases where tthe 10% rule does not apply
-
-        if rotation_y - new_height < 0:
-            new_height = rotation_y
-        elif rotation_y + new_height > self.image.shape[0]:
-            new_height = self.image.shape[0] - rotation_y
-
-        self.rotated_image = self.rotated_image[int(rotation_y - new_height): int(rotation_y + new_height)]
+    # converting angle from radians to degrees
+    angle = (angle * 180 / np.pi)
+    # angle = np.linspace(angle - 0.5, angle + 0.5, num=11)
+    return angle
 
 
-        
-        
+def norm_rsmd_test(image):
+    """Fits function for any input image.
+
+    Parameters
+    -----------
+    image : `numpy.array`
+        2d array containing a rotated image with an isolated streaak.
+
+    Returns
+    --------
+    nr2 : `float`
+        A float that represents the normalized root squared mean deviation for
+        a rotated streak's profile.
+    a : `float`
+        Amplitude of the streak's profile.
+    mu : `float`
+        Location where streak's profile peaks.
+    width : `float`
+        The streak's width.
+    """
+    x = np.arange(0, image.shape[0], 1)
+    y = list(np.median(image, axis=1))
+    try:
+        a, mu, width = gs.fit(x, y)
+    except RuntimeError:
+        a, mu, width = False, False, False
+
+    if width is not False:
+        yhat = gs.gauss(x, a, mu, width)
+        nr2 = gs.nrmsd(x, y, yhat)
+    else:
+        return False, a, mu, width
+
+    return nr2, a, mu, width
 
 
-        
+def rotate_image(image, angle, coordinates):
+    """Rotates an image containing a streak about that streak's midpoint and determined
+    angle of rotation and crops that image for further analysis.
+
+    Parameters
+    -----------
+    image : `numpy.array`
+        Image containing the streaks of interest.
+    angle : `float`
+        Angle at which a particular streak is to be rotated such that the streak is parallel with
+        the x-axis of the image.
+    coordinates : `list`
+        A list of length two with the entrance and exit cartesian coordinates
+        of the streak of interest.
+
+    Returns
+    --------
+    rotated_image : `numpy.array`
+        Image containing the streak of interest rotated such that it is parallel with
+        the x-axis and cropped to reduce noise.
+    """
+    # finding midpoint of line to find point of rotation
+    # because pixels have to be integers, this midpoint will be an estimate
+
+    # rotating original image without crop
+    rotation_x = (coordinates[1][0] + coordinates[0][0]) // 2
+    rotation_y = (coordinates[1][1] + coordinates[0][1]) // 2
+
+    matrix = cv2.getRotationMatrix2D((rotation_x, rotation_y), angle, 1.0)
+    rotated_image = cv2.warpAffine(image.astype(float), matrix, (image.shape[1], image.shape[0]))
+
+    # cropping image
+    distance = np.sqrt((coordinates[1][0] - coordinates[0][0])**2 +
+                       (coordinates[1][1] - coordinates[0][1])**2)
+
+    # it's fine if end is bigger than the array, but if start
+    # goes negative we are indexing like array[bigger, lower]
+    # and get an empty array
+    start, end = int(rotation_y - 50), int(rotation_y + 50)
+    if start < 0:
+        start = 0
+
+    if distance < image.shape[1]:
+        rotated_image = rotated_image[start: end, 0: int(distance)]
+    else:
+        rotated_image = rotated_image[start: end]
+
+    return rotated_image
+
+
+def transform_rho_theta(clustered_lines, image, cart_coord):
+    """Transforms the polar coordinates of any cluster to the mean edge cartesian
+    coordinates.
+
+    Parameters
+    -----------
+    clustered_lines : `numpy.array`
+        Array of hough lines with three columns representing rho, theta, and cluster label.
+    image : `numpy.array`
+        Image containing the streaks of interest.
+    cart_coord : `numpy.array`
+        A list of tuples representing x,y coordinattes of points on the hough lines.
+
+    Returns
+    --------
+    transform_coords : `numpy.array`
+        Array of mean (x1, y1) and mean (x2, y2) coordinates and the cluster label.
+    """
+    dim_x, dim_y = clustered_lines.shape
+    # R and theta --> become x1, y2, x2, y2
+    clustered_line_coords = np.zeros((dim_x, dim_y+2))
+    for i, line in enumerate(clustered_lines):
+        (x1, y1), (x2, y2) = get_edge_intersections(line[0], line[1], image.shape, cart_coord[i])
+        clustered_line_coords[i, 0] = x1
+        clustered_line_coords[i, 1] = y1
+        clustered_line_coords[i, 2] = x2
+        clustered_line_coords[i, 3] = y2
+        clustered_line_coords[i, 4] = line[-1]
+
+    transform_coords = []
+    ncluster = int(max(clustered_lines[:, 2])) + 1
+
+    for i in range(ncluster):
+        cur_cluster = clustered_line_coords[clustered_line_coords[:, -1] == i][:, 0:-1]
+        x1_mean = np.mean(cur_cluster[:, 0])
+        y1_mean = np.mean(cur_cluster[:, 1])
+        x2_mean = np.mean(cur_cluster[:, 2])
+        y2_mean = np.mean(cur_cluster[:, 3])
+
+        transform_coords.append([(x1_mean, y1_mean), (x2_mean, y2_mean)])
+
+    return transform_coords
+
+
+def complete_rotate_image(clustered_lines, angles, image, cart_coord):
+    """Creates a rotated image for each cluster of lines if the cluster
+    passes validation checks.
+    Parameters
+    -----------
+    clustered_lines : `array`
+        Array of lines with each row corresponding to a single houghline,
+        the first column corresponding to rho, the second column corresponding to theta,
+        and the third column corresponding to the cluster.
+    angle : `array`
+        Array of angles determined by sckit image for each houghline.
+    image : `numpy.array`
+        A 2D array containing the image with the streaks of interest.
+
+    Return
+    --------
+    rotated_imaages : `list`
+        List of 2D matrices, each `numpy.array` represents a rotated image of a single cluster.
+    best_fit_params: `dictionary`
+        Best fit parameters that corresponds to each rotated image that passes validation checks.
+    """
+
+    clustered_line_mean_coords = transform_rho_theta(clustered_lines, image, cart_coord)
+    rotated_images = []
+    best_fit_params = []
+    counter = 0
+    for line_mean_coord in clustered_line_mean_coords:
+        counter += 1
+        mean_angle = determine_rotation_angle(line_mean_coord[0], line_mean_coord[1])
+        rotated_image = rotate_image(image.astype(float), mean_angle, line_mean_coord)
+        is_streak_okay, a, mu, sigma, fwhm = gs.fit_image(rotated_image)
+        logging.info(f"Streak okay? = {is_streak_okay}")
+
+        if is_streak_okay:
+            best_rotated_image = rotated_image
+            angles = np.arange(mean_angle - 0.5, mean_angle + 0.5, 0.1)
+            nrsmd_min = np.inf
+            for alpha in angles:
+                nrsmd_test, a_t, mu_t, width_t = norm_rsmd_test(rotated_image)
+                if nrsmd_test is not False and nrsmd_test < nrsmd_min:
+                    if not np.isinf(nrsmd_min):
+                        a, mu, sigma, fwhm = a_t, mu_t, width_t, width_t * 2.355
+                    nrsmd_min = nrsmd_test
+                    best_rotated_image = rotated_image
+            rotated_images.append(best_rotated_image)
+            best_fit_params.append({'amplitude': a,
+                                    'mean_brightness': mu,
+                                    'sigma': sigma,
+                                    'fwhm': fwhm})
+
+    return rotated_images, best_fit_params

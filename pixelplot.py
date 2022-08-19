@@ -1,9 +1,6 @@
 '''
-Author: Ashley Santos
-
 This module contains pixel plotting module that can be used to equalize and
 plot the median intensity values of the rotated image.
-
 '''
 
 import astropy.visualization as aviz
@@ -11,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def pixelplot(rotated_image, title=""):
+def pixelplot(rotated_image, title="", fig=None, ax=None):
     """Plots a rotated equalized cutout image of a trail
     and creates a histogram of the y-axis.
 
@@ -36,10 +33,9 @@ def pixelplot(rotated_image, title=""):
     spacing = 0.005
 
     rect_scatter = [left, bottom, width, height]
-
-    fig = plt.figure(figsize=(8, 8))
-
-    ax = fig.add_axes(rect_scatter)
+    if ax is None or fig is None:
+        fig = plt.figure(figsize=(8, 8))
+        ax = fig.add_axes(rect_scatter)
 
     stretch = aviz.HistEqStretch(rotated_image)
     norm = aviz.ImageNormalize(rotated_image, stretch=stretch, clip=True)

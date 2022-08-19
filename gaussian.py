@@ -1,17 +1,40 @@
 '''
-Author: Ashley Santos
-
 This module contains fitting and plotting functionalities.
 
 '''
+import logging
 
 import numpy as np
-import matplotlib.pyplot as plt
 import scipy.optimize as optim
+import matplotlib.pyplot as plt
+from astropy.stats import SigmaClip
+
+
+def line(x, a=0, b=0):
+    """
+    Calculates points on a line given by equation
+    y = a*x+b
+
+    Parameters
+    ----------
+    x : `numpy.array`
+        Range of values that gauss is applied on.
+    a : `float`, optional
+        The slope. Default = 0
+    b : `float`, optional
+        The y-intercept. Default = 0
+
+    Returns
+    -------
+    y : `numpy.array`
+        The y-values of the line.
+    """
+    return a*x+b
 
 
 def gauss(x, a, mu, width):
-    """Calculates a gaussian in sample points with the given parameters.
+    """
+    Calculates a gaussian in sample points with the given parameters.
 
     Parameters
     ----------
@@ -32,8 +55,9 @@ def gauss(x, a, mu, width):
     return a*np.exp(-(((x-mu)/(2*width))**2))
 
 
-def fit(x, y):
-    """Fits a gaussian to the given sample.
+def fit(x, y, p0=None, model=gauss):
+    """
+    Fits a gaussian to the given sample.
 
     Parameters
     ----------
@@ -41,23 +65,26 @@ def fit(x, y):
         X coordinates of the sample.
     y : `numpy.array`
         Y coordinates of the sample.
+    p0 : `tuple`, optional
+        List of initial parameters.
+    model : `callable`, optional
+        Profile model for fitting, by default gaussian.
 
     Returns
     -------
-    a : `float`
-        The amplitude.
-    mu : `float`
-        The mean.
-    width : `float`
-        The standard deviation.
+    params : `tuple`
+        Fitted parameters.
     """
-    (a, mu, width), unc = optim.curve_fit(gauss, x, y, p0=[200, ((x[-1] - x[0])/2), 50])
+    if p0 is None:
+        p0 = [np.max(y), ((x[-1] - x[0])/2), np.max(x)/4]
+    params, unc = optim.curve_fit(model, x, y, p0=p0)
 
-    return a, mu, width
+    return params
 
 
 def rmsd(x, y, yhat):
-    """Calculates root-mean-square deviation of the given parameters.
+    """
+    Calculates root-mean-square deviation of the given parameters.
 
     Parameters
     ----------
@@ -77,7 +104,8 @@ def rmsd(x, y, yhat):
 
 
 def nrmsd(x, y, yhat):
-    """Calculates normalized root-mean-square deviation of the given parameters.
+    """
+    Calculates normalized root-mean-square deviation of the given parameters.
 
     RMSD is normalized using the mean.
 
@@ -99,8 +127,9 @@ def nrmsd(x, y, yhat):
     return nrmsd/np.mean(y)
 
 
-def plot_profile(x, y, ax=None):
-    """Plots the profile of given sample coordinates.
+def plot_profile(x, y, ax=None, debug=False):
+    """
+    Plots the profile of given sample coordinates.
 
     Parameters
     ----------
@@ -129,6 +158,9 @@ def plot_profile(x, y, ax=None):
         yhat = gauss(x, a, mu, width)
         r2 = rmsd(x, y, yhat)
         nr2 = nrmsd(x, y, yhat)
+        if debug:
+            is_streak_okay = validate_streak(a, mu, r2, nr2, x[-1], x[0], width, debug)
+            ax.text(min(x), max(y), f"Validated: {is_streak_okay}")
         ax.plot(x, yhat, label=f"R2={r2:.3} \n NR2={nr2:.3}", color="red")
         ax.legend()
 
@@ -137,8 +169,47 @@ def plot_profile(x, y, ax=None):
     return ax
 
 
-def plot_image_profile(rotated_image, ax=None):
-    """Plots the profile of given image array.
+def validate_streak(a, mu, r2, nr2, xmax, xmin, sigma, debug=False):
+    """
+    Validates whether the plot profile contains a streak we can
+    successfully fit with a gaussian or not.
+
+    Parameters
+    ----------
+    a : `float`
+        The fit amplitude.
+    mu : `float`
+        The fit mean.
+    r2 : `float`
+        The fit root-mean-squared-deviation.
+    nr2 : `float`
+        The fit normalized-square-root-deviation.
+    xmax : `float`
+        The maximum x-value on x-axis.
+    xmin : `float`
+        The minimum x-value on x-axis.
+
+    Returns
+    -------
+    True : `boolean`
+        A confirmed streak from the image/parameters.
+    False : `boolean`
+        Could not confirm a streak from the image/parameters.
+    """
+    streak_zero_location = np.abs(mu - ((xmax - xmin) / 2))
+    fwhm = 2.355 * sigma
+    logging.info(f"Distance from middle: {streak_zero_location:.3}")
+    logging.info(f"Full Width Half Max: {fwhm:.3}")
+    logging.info(f"RMSD: {r2:.3}, NRMSD: {nr2:.3}")
+    if nr2 <= 2 and streak_zero_location < 10 and fwhm < 20:
+        return True
+    else:
+        return False
+
+
+def plot_image_profile(rotated_image, ax=None, debug=False):
+    """
+    Plots the profile of given image array.
 
     Parameters
     ----------
@@ -155,11 +226,13 @@ def plot_image_profile(rotated_image, ax=None):
     x = np.arange(0, rotated_image.shape[0], 1)
     y = list(np.median(rotated_image, axis=1))
 
-    return plot_profile(x, y, ax)
+    return plot_profile(x, y, ax, debug)
 
 
 def generate_data(x, a, mu, width, noise_level=10):
-    """Given sample coordinates with generate data with random noise, which can be adjusted with the parameters.
+    """
+    Given sample coordinates with generate data with random noise,
+    which can be adjusted with the parameters.
 
     Parameters
     ----------
@@ -172,7 +245,9 @@ def generate_data(x, a, mu, width, noise_level=10):
     width : `float`
         The standard deviation.
     noise_level : `float`, optional
-        Given amount of noise to add to normal distribution.
+        Factor to divide noise by.
+        For example, if you set this parameter to a large value,
+        the gaussian will have less noise added.
 
     Returns
     -------
@@ -183,3 +258,59 @@ def generate_data(x, a, mu, width, noise_level=10):
     noise = np.random.normal(size=(len(y)))/noise_level
     noisy_y = y + noise
     return noisy_y
+
+
+def detrend(x, y, sigma=3, maxiters=10):
+    """
+    Detrends given data by removing outliers and fitting a line.
+
+    Parameters
+    ----------
+    x : `np.array`
+        Points in which data is sampled.
+    y : `np.array`
+        Value of data at sample point.
+    sigma : `float`, optional
+        Standard deviation value passed to the sigma clip, 3 by default.
+    maxiters : `int`, optional
+        Number of maximally allowed sigma clip iterations, 10 by default.
+
+    Returns
+    --------
+    y : `np.array`
+        Detrended value of the data at sampled points.
+    """
+    sigma_clip = SigmaClip(sigma, maxiters)
+    init_guess = [0, 0]
+    a, b = fit(x, sigma_clip(y), p0=init_guess, model=line)
+    return y - line(x, a, b), a, b
+
+
+def fit_image(rotated_image):
+    """
+    Takes a rotated image, fits the gaussian to it and returns
+    output parameters for images that pass the validation.
+
+    Parameters
+    ----------
+    rotated_image : `numpy.array`
+        Desired image you want to fit.
+    """
+    x = np.arange(0, rotated_image.shape[0], 1)
+    y = list(np.median(rotated_image, axis=1))
+    detrended, la, lb = detrend(x, y)
+
+    init_guess = [np.max(y), ((x[-1] - x[0])/2), np.max(x)/4]
+    try:
+        a, mu, sigma = fit(x, detrended, p0=init_guess, model=gauss)
+    except RuntimeError:
+        return False, None, None, None, None
+
+    yhat = gauss(x, a, mu, sigma)
+
+    r2 = rmsd(x, detrended, yhat)
+    nr2 = nrmsd(x, detrended, yhat)
+
+    is_streak_okay = validate_streak(a, mu, r2, nr2, x[-1], x[0], sigma)
+
+    return is_streak_okay, a, mu, sigma, 2.355 * sigma

@@ -1,9 +1,6 @@
 '''
-Author: Ashley Santos
-
 This module contains pixel plotting module that can be used to equalize and
 plot the median intensity values of the rotated image.
-
 '''
 
 import astropy.visualization as aviz
